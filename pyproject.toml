@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kalman_python"
+version = "0.1.0"
+description = "A Python implementation of Kalman filtering"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "Michael Lanahan", email = "michael.lanahan0430@gmail.com"},
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "pytest>=9.0.2",
+    "pandas>=2.3.3",
+    "scipy>=1.17.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "mypy",
+    "flake8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+kalman_python = ["py.typed"]  # If you want to include type hints

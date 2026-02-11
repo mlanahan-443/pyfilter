@@ -1,0 +1,24 @@
+Immediate Term
+[X] Linear cross covariance implementation in covariance + add to guassian random variable.
+[X] Add ability to conditional to work with covariance objects.
+[X] Add broadcasting to covariance.
+[X] Add testing for covariance in GuassianRV.
+[X] Deal with typing in __add__ and __sub__ in GRV so when adding covariance + matrix this errors.
+[ ] Test basic linear kalman filter with GRV
+    [ ] Matrix Covariances.
+    [ ] Covariance Objects
+
+Medium Term
+[ ] Add Unscented Transform
+[ ] Add Extended Transform
+
+Long Term
+[ ] Linear kinimatic model with arbitrary number of derivatives.
+    [ ] Analytical eigenvalues.
+    [ ] Higher order discritizations.
+[ ] Unscented Kalman Filter
+[ ] Extended Kalman Filter
+[ ] Process Noise
+    [ ] Analytical eigenvalues.
+[ ] Full bayesian modeling for checking work.
+

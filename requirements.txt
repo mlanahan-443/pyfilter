@@ -1,0 +1,2 @@
+-e file:///home/mlanahan/Documents/projects/kalman/kalman/multivariate/kalman_python
+numpy==2.4.1

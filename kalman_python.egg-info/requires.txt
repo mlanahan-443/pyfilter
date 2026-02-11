@@ -1,0 +1,8 @@
+numpy>=1.20.0
+
+[dev]
+pytest>=6.0
+pytest-cov
+black
+mypy
+flake8
