@@ -1,14 +1,13 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from kalman_python.types.random_variables import GaussianRV
-from kalman_python.hints import FloatArray
+from pyfilter.types.random_variables import GaussianRV
+from pyfilter.hints import FloatArray
 import numpy as np
 
-type Variable = GaussianRV[GaussianRV] | GaussianRV[FloatArray] | FloatArray
+type Variable = GaussianRV | FloatArray
 
 
 class LinearTransitionBase[State: Variable, Time: FloatArray](ABC):
-    
     @abstractmethod
     def matrix(self, dt: FloatArray) -> FloatArray:
         """The matrix implied by the transform."""

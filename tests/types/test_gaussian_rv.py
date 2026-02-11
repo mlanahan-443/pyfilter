@@ -4,8 +4,8 @@ from numpy.testing import assert_allclose
 
 # --- Imports from your file ---
 # (Assumes gaussian_rv.py is in the same directory)
-from kalman_python.types.random_variables import GaussianRV, DTYPE, FloatArray
-from kalman_python.types.covariance import (
+from pyfilter.types.random_variables import GaussianRV, DTYPE, FloatArray
+from pyfilter.types.covariance import (
     DiagonalCovariance,
     cholesky_factor,
 )
@@ -711,7 +711,7 @@ class TestGaussianRVMethods:
         """Test X1 | X2 = mu_2"""
         c12 = np.array([[0.5], [0.2]])  # (2, 1)
 
-        m1, m2 = grv_2d.mean, grv_1d.mean
+        m1, _m2 = grv_2d.mean, grv_1d.mean
         c11 = (
             grv_2d.covariance
             if isinstance(grv_2d.covariance, np.ndarray)

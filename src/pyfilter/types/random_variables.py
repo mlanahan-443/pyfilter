@@ -1,16 +1,16 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from kalman_python.config import DTYPE_ as DTYPE
-from kalman_python.hints import FloatArray, ArrayIndex
+from pyfilter.config import DTYPE_ as DTYPE
+from pyfilter.hints import FloatArray, ArrayIndex
 from typing import cast, Callable, Any, Self
 from numpy.typing import ArrayLike
-from kalman_python.types.covariance import (
+from pyfilter.types.covariance import (
     CovarianceBase,
     linear_cross_covariance,
     cholesky_factor,
 )
-from kalman_python.linear_solve import solve_symmetric_cholesky
+from pyfilter.linear_solve import solve_symmetric_cholesky
 
 CHOLESK_SYMN_ = {"chofactor", "cho", "cholesky", "square-root"}
 ARRAY_SYMN_ = {"array", "np.ndarray", "FloatArray", "Array"}
@@ -18,6 +18,7 @@ COV_SYMN_ = CHOLESK_SYMN_.union(ARRAY_SYMN_)
 
 type CovarianceType = CovarianceBase | FloatArray
 type Variable = GaussianRV | FloatArray | CovarianceBase | float
+
 
 class _ArrayUfuncWrangler:
     """Handles NumPy ufunc dispatching for GaussianRV objects.
@@ -115,7 +116,6 @@ class _ArrayUfuncWrangler:
 
 @dataclass
 class GaussianRV[Covariance: CovarianceType]:
-    
     mean: FloatArray
     covariance: Covariance
 
@@ -198,7 +198,9 @@ class GaussianRV[Covariance: CovarianceType]:
                 )
         elif isinstance(other, CovarianceBase):
             if other.matrix_shape != self.covariance.shape[:-2]:
-                raise ValueError(f"Covariance with shape: {other.shape} not compatible with {self.covariance.shape}")
+                raise ValueError(
+                    f"Covariance with shape: {other.shape} not compatible with {self.covariance.shape}"
+                )
 
     def __add__(self, other: Variable) -> GaussianRV:
         """Add a GaussianRV, constant array, or scalar to this GaussianRV."""
@@ -216,10 +218,9 @@ class GaussianRV[Covariance: CovarianceType]:
 
             return GaussianRV(self.mean + other.mean, new_cov)
         elif isinstance(other, CovarianceBase):
-            return GaussianRV(self.mean,self.covariance + other)
+            return GaussianRV(self.mean, self.covariance + other)
         else:  # scalar or array constant
             return GaussianRV(self.mean + other, self.covariance.copy())
-
 
     def __radd__(self, other: Variable) -> GaussianRV:
         """Right addition (for scalar/array + GaussianRV)."""
@@ -643,11 +644,8 @@ class GaussianRV[Covariance: CovarianceType]:
             return np.einsum("...ij,...kj->...ik", self.covariance, A)
 
         return linear_cross_covariance(self.covariance, A)
-    
+
     @classmethod
     def zero_mean(cls, covariance: CovarianceType) -> Self:
         """Zero mean gaussian random variable."""
-        return cls(
-            np.zeros(covariance.shape[:-1]),
-            covariance
-        )
+        return cls(np.zeros(covariance.shape[:-1]), covariance)

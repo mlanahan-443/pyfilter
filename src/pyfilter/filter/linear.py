@@ -2,10 +2,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ..types.random_variables import GaussianRV
 from ..types.process_noise import ProcessNoise
-from kalman_python.models.linear_transition import LinearTransitionBase
-from kalman_python.models.linear_transform import LinearTransformBase
+from pyfilter.models.linear_transition import LinearTransitionBase
+from pyfilter.models.linear_transform import LinearTransformBase
 from ..hints import FloatArray
-from kalman_python.types.covariance import CholeskyFactorCovariance
+from pyfilter.types.covariance import CholeskyFactorCovariance
 import numpy as np
 from typing import Protocol
 
@@ -14,7 +14,6 @@ type Variable = GaussianRV
 
 
 class KalmanFilter[State, Time](Protocol):
-    
     def predict(self, current_state: State, dt: Time) -> State: ...
 
     def update(self, state_prediction: State, residual: State) -> Time: ...
@@ -24,7 +23,9 @@ class KalmanFilter[State, Time](Protocol):
 
 @dataclass
 class LinearGuassianKalman[
-    State: GaussianRV, Measurement: GaussianRV, Time: FloatArray
+    State: GaussianRV,
+    Measurement: GaussianRV,
+    Time: FloatArray,
 ]:
     """Base linear gaussian kalman filter."""
 
@@ -33,13 +34,17 @@ class LinearGuassianKalman[
     measurement_model: LinearTransformBase
 
     def predict(self, current_state: State, dt: Time) -> State:
-        return self.transition_model.transform(current_state, dt) + self.process_noise(dt)
+        return self.transition_model.transform(current_state, dt) + self.process_noise(
+            dt
+        )
 
     def update(self, state_prediction: State, innovation: Measurement) -> GaussianRV:
         cross_covariance = state_prediction.linear_cross(self.measurement_model.matrix)
         return state_prediction.conditional(innovation, cross_covariance)
 
-    def innovation(self, state_prediction: State, measurement: Measurement) -> Measurement:
+    def innovation(
+        self, state_prediction: State, measurement: Measurement
+    ) -> Measurement:
         return self.measurement_model @ state_prediction - measurement
 
 

@@ -3,7 +3,7 @@ import numpy as np
 
 from typing import Tuple, Any, Callable
 from types import EllipsisType
-from kalman_python.hints import ArrayIndex
+from pyfilter.hints import ArrayIndex
 from dataclasses import dataclass
 
 # Define a full slice object

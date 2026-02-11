@@ -1,15 +1,15 @@
-from kalman_python.filter.linear import (
+from pyfilter.filter.linear import (
     LinearGuassianKalman,
     LinearPredictor,
     GaussianRV,
     square_root_quadratic_update,
 )
-from kalman_python.types.process_noise import ProcessNoise
+from pyfilter.types.process_noise import ProcessNoise
 import numpy as np
 from numpy.typing import NDArray
 from numpy.random import default_rng
 import pytest
-from kalman_python.types.covariance import CholeskyFactorCovariance
+from pyfilter.types.covariance import CholeskyFactorCovariance
 
 
 @pytest.fixture

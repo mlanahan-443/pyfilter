@@ -13,6 +13,7 @@ from ..util import (
 )
 from typing import Self, Callable, Any
 from numbers import Number
+
 type CovarianceType = CovarianceBase | FloatArray
 
 ALLOWED_TYPES_ = [
@@ -29,6 +30,7 @@ def type_error_msg(object: Any) -> str:
 
 CHOL_UFUNC_CACHE_ = {}
 DIAG_UFUNC_CACHE_ = {}
+
 
 class CovarianceBase(ABC):
     """Class for representation of covariances.
@@ -110,9 +112,7 @@ class CovarianceBase(ABC):
         ...
 
     @abstractmethod
-    def _add_to_covariance(
-        self, other: CovarianceType
-    ) -> CovarianceBase:
+    def _add_to_covariance(self, other: CovarianceType) -> CovarianceBase:
         """Called when self is added to a Covariance object.
 
         Args:
@@ -334,9 +334,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         """
         return np.linalg.norm(self.cholesky_factor, axis=-1) ** 2
 
-    def _add_to_covariance(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance:
+    def _add_to_covariance(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Addition of one covariance object (other) to self.
 
         The provided covariance may be either a Covariance or just a FloatArray.
@@ -694,7 +692,9 @@ class DiagonalCovariance(CovarianceBase):
 
         return DiagonalCovariance((self.variance - other.variance) ** 0.5)
 
-    def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __add__(
+        self, other: CovarianceType
+    ) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Add covariance with another covariance object.
 
         I believe the fastest way to compute this is just computing
@@ -708,7 +708,9 @@ class DiagonalCovariance(CovarianceBase):
         else:
             raise TypeError(type_error_msg(other))
 
-    def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __radd__(
+        self, other: CovarianceType
+    ) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Addition of is communative.
 
         Args:
@@ -720,7 +722,9 @@ class DiagonalCovariance(CovarianceBase):
 
         return self.__add__(other)
 
-    def __sub__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __sub__(
+        self, other: CovarianceType
+    ) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Subtract covariance from the current covariance object.
 
         I believe the fastest way to compute this is just computing

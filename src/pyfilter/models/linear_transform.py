@@ -1,14 +1,12 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from kalman_python.types.random_variables import GaussianRV
-from kalman_python.hints import FloatArray
-import numpy as np
+from pyfilter.types.random_variables import GaussianRV
+from pyfilter.hints import FloatArray
 
 type Variable = GaussianRV | FloatArray
 
 
 class LinearTransformBase[State: Variable](ABC):
-    
     @property
     @abstractmethod
     def matrix(self) -> FloatArray:
@@ -23,7 +21,6 @@ class LinearTransformBase[State: Variable](ABC):
 
 
 class InvertibleLinearTransform[State: Variable](LinearTransformBase[State]):
-    
     @abstractmethod
     def inverse(self) -> FloatArray:
         """The inverse of the transform."""
@@ -40,4 +37,3 @@ class GenericLinearTransform[State: Variable](LinearTransformBase):
 
     def transform(self, x: State) -> State:
         return self._A @ x
-

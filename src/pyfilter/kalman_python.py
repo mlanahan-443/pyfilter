@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 import numpy as np
-import kalman_python.config as config
-from kalman_python.hints import FloatArray
+import pyfilter.config as config
+from pyfilter.hints import FloatArray
 
 
 class GaussianKalman(ABC):

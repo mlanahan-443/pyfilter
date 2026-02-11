@@ -1,13 +1,13 @@
 from __future__ import annotations
 from scipy.linalg import cholesky, cho_solve
-from kalman_python.types.covariance import (
+from pyfilter.types.covariance import (
     solve_cholesky_covariance,
     solve_diagonal_covariance,
     DiagonalCovariance,
     CholeskyFactorCovariance,
     CovarianceBase,
 )
-from kalman_python.hints import FloatArray
+from pyfilter.hints import FloatArray
 import numpy as np
 
 

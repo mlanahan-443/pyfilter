@@ -7,7 +7,7 @@ def batched_matmul(n: int, m: int):
     x = np.random.random(size=(m, m))
 
     start = time.time()
-    y = A @ x
+    A @ x
     end = time.time()
 
     return end - start

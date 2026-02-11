@@ -1,7 +1,7 @@
 """Test utility functions."""
 
 import numpy as np
-from kalman_python.util import left_broadcast_arrays
+from pyfilter.util import left_broadcast_arrays
 import pytest
 
 

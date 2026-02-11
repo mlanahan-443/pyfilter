@@ -1,4 +1,4 @@
-from kalman_python.config import DTYPE_
+from pyfilter.config import DTYPE_
 from numpy.typing import NDArray
 from types import EllipsisType
 import numpy as np

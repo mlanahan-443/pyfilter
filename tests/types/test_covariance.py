@@ -5,7 +5,7 @@ from scipy.linalg import cho_factor
 import re
 
 # Import the classes from the file
-from kalman_python.types.covariance import (
+from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
     cholesky_factor,

@@ -1,5 +1,5 @@
-from kalman_python.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
-from kalman_python.linear_solve import (
+from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
+from pyfilter.linear_solve import (
     solve_cholesky_covariance,
     solve_symmetric_cholesky,
     solve_diagonal_covariance,
