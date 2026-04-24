@@ -1,16 +1,17 @@
-import pytest
+import re
+
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 from scipy.linalg import cho_factor
-import re
 
 # Import the classes from the file
 from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
     cholesky_factor,
-    type_error_msg,
     linear_cross_covariance,
+    type_error_msg,
 )
 
 # --- Fixtures ---

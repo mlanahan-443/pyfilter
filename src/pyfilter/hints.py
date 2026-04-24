@@ -1,8 +1,10 @@
-from pyfilter.config import DTYPE_
-from numpy.typing import NDArray
 from types import EllipsisType
-import numpy as np
 from typing import Any
+
+import numpy as np
+from numpy.typing import NDArray
+
+from pyfilter.config import DTYPE_
 
 type FloatArray = NDArray[DTYPE_] | NDArray[np.floating[Any]]
 

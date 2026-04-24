@@ -1,16 +1,18 @@
-from numpy.typing import ArrayLike
-import numpy as np
-
-from typing import Tuple, Any, Callable
-from types import EllipsisType
-from pyfilter.hints import ArrayIndex
+from collections.abc import Callable
 from dataclasses import dataclass
+from types import EllipsisType
+from typing import Any
+
+import numpy as np
+from numpy.typing import ArrayLike
+
+from pyfilter.hints import ArrayIndex
 
 # Define a full slice object
 full_slice = slice(None, None, None)  # Represents the ':'
 
 
-def normalize_index(array_index: Any, ndim: int) -> Tuple[Any, ...]:
+def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
     """
     Expands the Ellipsis ('...') in an array index into a series of full slices.
 
@@ -64,7 +66,7 @@ def normalize_index(array_index: Any, ndim: int) -> Tuple[Any, ...]:
     return tuple(normalized)
 
 
-def left_broadcast_arrays(*args: ArrayLike):
+def left_broadcast_arrays(*args: ArrayLike) -> list[np.ndarray[Any, Any]]:
     """
     Broadcasts any number of arrays against each other using left-aligned logic
     (batch dimensions first), rather than NumPy's standard right-aligned logic.
@@ -102,7 +104,7 @@ def left_broadcast_arrays(*args: ArrayLike):
             aligned_arrays.append(arr)
 
     # Use standard numpy broadcasting on the now-aligned arrays
-    return np.broadcast_arrays(*aligned_arrays)
+    return list(np.broadcast_arrays(*aligned_arrays))
 
 
 type IndexingFunction[T] = Callable[[ArrayIndex], T]
@@ -122,7 +124,10 @@ class _IndexerMethod[T]:
         return self._func(index)
 
 
-def implements_ufunc(np_function: Callable, handler_cache: dict[Callable, Callable]):
+def implements_ufunc(
+    np_function: Callable[..., Any],
+    handler_cache: dict[Callable[..., Any], Callable[..., Any]],
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Utility function for indexing handled NumPy Functions.
 
     Args:
@@ -133,7 +138,7 @@ def implements_ufunc(np_function: Callable, handler_cache: dict[Callable, Callab
         The wrapped function.
     """
 
-    def decorator(func: Callable):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         handler_cache[np_function] = func
         return func
 

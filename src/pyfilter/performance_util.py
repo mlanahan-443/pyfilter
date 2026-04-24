@@ -1,7 +1,8 @@
-from functools import wraps
-from typing import Callable, Protocol, Any
-import weakref
 import warnings
+import weakref
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, Protocol
 
 
 class MonitoredMethod(Protocol):
@@ -10,18 +11,22 @@ class MonitoredMethod(Protocol):
 
 
 # Global cache for tracking calls per object
-_OBJECT_CALL_COUNTS = weakref.WeakKeyDictionary()
-_CACHED_RESULTS = weakref.WeakKeyDictionary()
+_OBJECT_CALL_COUNTS: weakref.WeakKeyDictionary[Any, dict[str, Any]] = (
+    weakref.WeakKeyDictionary()
+)
+_CACHED_RESULTS: weakref.WeakKeyDictionary[Any, dict[Any, Any]] = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def performance_monitor(
     warn_threshold: int = 3, enable_warnings: bool = True, monitor: bool = True
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Monitor repeated calls to expensive methods using __id__ for state tracking."""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(self, *args, **kwargs):
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
             if monitor:
                 # Initialize tracking for this object if needed
                 if self not in _OBJECT_CALL_COUNTS:
@@ -40,6 +45,7 @@ def performance_monitor(
                         f"{self.__class__.__name__} does not implement __id__(). "
                         "Performance monitoring may be inaccurate.",
                         UserWarning,
+                        stacklevel=2,
                     )
                     current_id = (id(self), 0)
 

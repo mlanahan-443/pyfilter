@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from ..hints import FloatArray
 from .covariance import CovarianceBase
 
@@ -6,7 +7,7 @@ type Covariance = FloatArray | CovarianceBase
 
 
 class ProcessNoise(ABC):
-    def __init__(self, shape: tuple):
+    def __init__(self, shape: tuple[int, ...]):
         self.shape = shape
 
     @abstractmethod

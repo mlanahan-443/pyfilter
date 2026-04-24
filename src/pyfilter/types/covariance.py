@@ -1,18 +1,22 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from ..hints import FloatArray, ArrayIndex, IndexItem
+from collections.abc import Callable
+from numbers import Number
+from typing import Any, Self, overload
+
 import numpy as np
 from scipy.linalg import cho_factor, cho_solve
+
 from ..config import CHOLESKY_CHECK_FINITE_, MONITOR_PERFORMANCE_
+from ..hints import ArrayIndex, FloatArray, IndexItem
 from ..performance_util import performance_monitor
 from ..util import (
-    left_broadcast_arrays,
-    normalize_index,
     _IndexerMethod,
     implements_ufunc,
+    left_broadcast_arrays,
+    normalize_index,
 )
-from typing import Self, Callable, Any
-from numbers import Number
 
 type CovarianceType = CovarianceBase | FloatArray
 
@@ -28,8 +32,8 @@ def type_error_msg(object: Any) -> str:
     return f"Covariance must be one of: {ALLOWED_TYPES_} not: {type(object)}"
 
 
-CHOL_UFUNC_CACHE_ = {}
-DIAG_UFUNC_CACHE_ = {}
+CHOL_UFUNC_CACHE_: dict[Callable[..., Any], Callable[..., Any]] = {}
+DIAG_UFUNC_CACHE_: dict[Callable[..., Any], Callable[..., Any]] = {}
 
 
 class CovarianceBase(ABC):
@@ -40,7 +44,7 @@ class CovarianceBase(ABC):
     performance.
     """
 
-    _UFUNC_CACHE = {}
+    _UFUNC_CACHE: dict[Callable[..., Any], Callable[..., Any]] = {}
     # Set higher priority than ndarray to ensure our methods are called first
     __array_priority__ = 1000
 
@@ -52,7 +56,7 @@ class CovarianceBase(ABC):
         return self._matrix_shape
 
     @property
-    def diagonal_indices(self) -> tuple:
+    def diagonal_indices(self) -> tuple[Any, ...]:
         return np.diag_indices(self.matrix_shape[0])
 
     @property
@@ -142,7 +146,7 @@ class CovarianceBase(ABC):
         ...
 
     @abstractmethod
-    def __add__(self, other: CovarianceBase) -> CovarianceBase:
+    def __add__(self, other: CovarianceType) -> CovarianceBase:
         """Addition of one covariance object with another.
 
         Args:
@@ -173,7 +177,8 @@ class CovarianceBase(ABC):
         Returns:
             The trace of the batch covariances.
         """
-        return np.sum(self.variance, axis=-1)
+        result: FloatArray = np.sum(self.variance, axis=-1)
+        return result
 
     @property
     def at(self) -> _IndexerMethod[Self]:
@@ -200,13 +205,15 @@ class CovarianceBase(ABC):
         ...
 
     @abstractmethod
-    def _apply_fast_matrix_slice(self, batch_idx: tuple, matrix_idx: tuple) -> Self:
+    def _apply_fast_matrix_slice(
+        self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
+    ) -> Self:
         """
         Performs the fast slicing on the specific underlying data (_L or _D).
         """
         ...
 
-    def _get_norm_index(self, index: ArrayIndex) -> tuple:
+    def _get_norm_index(self, index: ArrayIndex) -> tuple[Any, ...]:
         """Split index into batch and matrix indices."""
         try:
             full_ndim = self.ndim
@@ -254,10 +261,17 @@ class CovarianceBase(ABC):
 
         return self.at[index]
 
-    def __array_function__(self, func: Callable, types, args, kwargs) -> CovarianceBase:
+    def __array_function__(
+        self,
+        func: Callable[..., Any],
+        types: tuple[type, ...],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> CovarianceBase:
         if func not in self._UFUNC_CACHE:
-            return NotImplemented
-        return self._UFUNC_CACHE[func](*args, **kwargs)
+            return NotImplemented  # type: ignore[return-value]
+        result: CovarianceBase = self._UFUNC_CACHE[func](*args, **kwargs)
+        return result
 
     @abstractmethod
     def inverse(self) -> FloatArray:
@@ -287,7 +301,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         if L.shape[-1] != L.shape[-2]:
             raise ValueError("Last two dimensions must specify a square matrix.")
 
-        super().__init__(L.shape[-2:])
+        super().__init__((L.shape[-2], L.shape[-1]))
         self._L = L.copy() if copy else L
         if immutable:
             self._L.setflags(write=False)
@@ -332,7 +346,8 @@ class CholeskyFactorCovariance(CovarianceBase):
         Returns:
             FloatArray: The variance
         """
-        return np.linalg.norm(self.cholesky_factor, axis=-1) ** 2
+        result: FloatArray = np.linalg.norm(self.cholesky_factor, axis=-1) ** 2
+        return result
 
     def _add_to_covariance(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Addition of one covariance object (other) to self.
@@ -388,6 +403,18 @@ class CholeskyFactorCovariance(CovarianceBase):
         mat[..., *self.diagonal_indices] -= other.variance
         return cholesky_factor(mat)
 
+    @overload
+    def __add__(self, other: CholeskyFactorCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __add__(self, other: DiagonalCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __add__(self, other: FloatArray) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance: ...
+
     def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Add covariance with another covariance object.
 
@@ -401,6 +428,18 @@ class CholeskyFactorCovariance(CovarianceBase):
             return self._add_to_diagonal(other)
         else:
             raise TypeError(type_error_msg(other))
+
+    @overload
+    def __radd__(self, other: CholeskyFactorCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __radd__(self, other: DiagonalCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __radd__(self, other: FloatArray) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance: ...
 
     def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Addition of is communative.
@@ -486,7 +525,8 @@ class CholeskyFactorCovariance(CovarianceBase):
         Returns:
             FloatArray: the full matrix representation of the covariance.
         """
-        return np.einsum("...ik,...jk->...ij", self._L, self._L)
+        result: FloatArray = np.einsum("...ik,...jk->...ij", self._L, self._L)
+        return result
 
     @performance_monitor(
         warn_threshold=2,
@@ -511,7 +551,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         return start_safe and step_safe
 
     def _apply_fast_matrix_slice(
-        self, batch_idx: tuple, matrix_idx: tuple
+        self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
     ) -> CholeskyFactorCovariance:
         L_view = self._L[batch_idx]
         return CholeskyFactorCovariance(L_view[..., *matrix_idx], copy=False)
@@ -633,7 +673,7 @@ class DiagonalCovariance(CovarianceBase):
 
         return CholeskyFactorCovariance(other * self._D[..., np.newaxis, :])
 
-    def _add_to_covariance(
+    def _add_to_covariance(  # type: ignore[override]
         self, other: FloatArray | CholeskyFactorCovariance
     ) -> CholeskyFactorCovariance:
         """Addition of one covariance object (other) to self.
@@ -692,6 +732,20 @@ class DiagonalCovariance(CovarianceBase):
 
         return DiagonalCovariance((self.variance - other.variance) ** 0.5)
 
+    @overload
+    def __add__(self, other: DiagonalCovariance) -> DiagonalCovariance: ...
+
+    @overload
+    def __add__(self, other: CholeskyFactorCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __add__(self, other: FloatArray) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __add__(
+        self, other: CovarianceType
+    ) -> CholeskyFactorCovariance | DiagonalCovariance: ...
+
     def __add__(
         self, other: CovarianceType
     ) -> CholeskyFactorCovariance | DiagonalCovariance:
@@ -707,6 +761,20 @@ class DiagonalCovariance(CovarianceBase):
             return self._add_to_diagonal(other)
         else:
             raise TypeError(type_error_msg(other))
+
+    @overload
+    def __radd__(self, other: DiagonalCovariance) -> DiagonalCovariance: ...
+
+    @overload
+    def __radd__(self, other: CholeskyFactorCovariance) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __radd__(self, other: FloatArray) -> CholeskyFactorCovariance: ...
+
+    @overload
+    def __radd__(
+        self, other: CovarianceType
+    ) -> CholeskyFactorCovariance | DiagonalCovariance: ...
 
     def __radd__(
         self, other: CovarianceType
@@ -773,7 +841,7 @@ class DiagonalCovariance(CovarianceBase):
         return row_idx == col_idx
 
     def _apply_fast_matrix_slice(
-        self, batch_idx: tuple, matrix_idx: tuple
+        self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
     ) -> DiagonalCovariance:
         # self._D is shape (Batch..., Dim)
         # matrix_idx passed from parent is (row_idx, col_idx)
@@ -808,9 +876,10 @@ class DiagonalCovariance(CovarianceBase):
             else:
                 diagonal_idx = matrix_col_idx
         else:
-            diagonal_idx = (
+            diag_idx_temp: Any = (
                 matrix_row_idx if matrix_row_idx != slice(None) else matrix_col_idx
             )
+            diagonal_idx = diag_idx_temp
 
         batch_indexer = norm_index[:-2]
         new_D = self._D[batch_indexer + (diagonal_idx,)]
@@ -876,12 +945,13 @@ def solve_cholesky_covariance(
         X: The variable.
     """
 
-    return cho_solve(
+    result: FloatArray = cho_solve(
         (P.cholesky_factor, True),
         B,
         check_finite=CHOLESKY_CHECK_FINITE_,
         overwrite_b=overwrite_b,
     )
+    return result
 
 
 def solve_diagonal_covariance(P_: DiagonalCovariance, B_: FloatArray) -> FloatArray:
@@ -897,7 +967,8 @@ def solve_diagonal_covariance(P_: DiagonalCovariance, B_: FloatArray) -> FloatAr
         X: The variable.
     """
     P, B = left_broadcast_arrays(P_.variance, B_)
-    return B / P
+    result: FloatArray = B / P
+    return result
 
 
 def linear_cross_covariance(
@@ -917,7 +988,9 @@ def linear_cross_covariance(
 
     if isinstance(P_, CholeskyFactorCovariance):
         P, A = left_broadcast_arrays(P_.full(), A_)
-        return np.einsum("...ij,...kj->...ik", P, A)
+        result: FloatArray = np.einsum("...ij,...kj->...ik", P, A)
+        return result
     else:
         D, A = left_broadcast_arrays(P_.variance, A_)
-        return D * A.swapaxes(-1, -2)
+        result2: FloatArray = D * A.swapaxes(-1, -2)
+        return result2

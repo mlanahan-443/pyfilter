@@ -1,14 +1,16 @@
 from __future__ import annotations
-from scipy.linalg import cholesky, cho_solve
+
+import numpy as np
+from scipy.linalg import cho_solve, cholesky
+
+from pyfilter.hints import FloatArray
 from pyfilter.types.covariance import (
-    solve_cholesky_covariance,
-    solve_diagonal_covariance,
-    DiagonalCovariance,
     CholeskyFactorCovariance,
     CovarianceBase,
+    DiagonalCovariance,
+    solve_cholesky_covariance,
+    solve_diagonal_covariance,
 )
-from pyfilter.hints import FloatArray
-import numpy as np
 
 
 def solve_symmetric_cholesky_dense_array(
@@ -38,7 +40,8 @@ def solve_symmetric_cholesky_dense_array(
     """
 
     L = cholesky(A, overwrite_a=overwrite_b, lower=True)
-    return cho_solve((L, True), B)
+    result: FloatArray = cho_solve((L, True), B)
+    return result
 
 
 def solve_symmetric_cholesky(

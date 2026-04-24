@@ -1,8 +1,9 @@
 """Test utility functions."""
 
 import numpy as np
-from pyfilter.util import left_broadcast_arrays
 import pytest
+
+from pyfilter.util import left_broadcast_arrays
 
 
 class TestLeftBroadcast:

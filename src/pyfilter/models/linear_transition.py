@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from pyfilter.types.random_variables import GaussianRV
-from pyfilter.hints import FloatArray
+from typing import Any
+
 import numpy as np
 
-type Variable = GaussianRV | FloatArray
+from pyfilter.hints import FloatArray
+from pyfilter.types.random_variables import GaussianRV
+
+type Variable = GaussianRV[Any] | FloatArray
 
 
 class LinearTransitionBase[State: Variable, Time: FloatArray](ABC):

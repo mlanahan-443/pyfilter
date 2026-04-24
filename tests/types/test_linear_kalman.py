@@ -1,15 +1,17 @@
+import numpy as np
+import pytest
+from numpy.random import default_rng
+from numpy.typing import NDArray
+
 from pyfilter.filter.linear import (
-    LinearGuassianKalman,
-    LinearPredictor,
-    GaussianRV,
+    LinearGaussianKalman,
     square_root_quadratic_update,
 )
-from pyfilter.types.process_noise import ProcessNoise
-import numpy as np
-from numpy.typing import NDArray
-from numpy.random import default_rng
-import pytest
+from pyfilter.models.linear_transform import GenericLinearTransform
+from pyfilter.models.linear_transition import LTI_Transition
 from pyfilter.types.covariance import CholeskyFactorCovariance
+from pyfilter.types.process_noise import ProcessNoise
+from pyfilter.types.random_variables import GaussianRV
 
 
 @pytest.fixture
@@ -94,11 +96,16 @@ def A2(dim: int, batch_shape: tuple[int, ...]) -> np.ndarray:
     return np.random.rand(*(batch_shape + (dim, dim))) + 0.1
 
 
-class ProcessNoiseClass(ProcessNoise):
-    def covariance(self, dt: NDArray[np.float64]) -> NDArray[np.float64]:
-        cov = np.zeros(self.shape)
-        np.fill_diagonal(cov, 1e-2)
-        return cov
+class SimpleProcessNoise(ProcessNoise):
+    """Simple constant process noise for testing."""
+
+    def __init__(self, shape: tuple):
+        super().__init__(shape)
+        self._cov = np.zeros(shape)
+        np.fill_diagonal(self._cov, 1e-2)
+
+    def covariance(self, dt: NDArray[np.float64]) -> GaussianRV:
+        return GaussianRV.zero_mean(self._cov)
 
 
 def test_square_root_quadratic_update(
@@ -116,30 +123,89 @@ def test_square_root_quadratic_update(
     np.testing.assert_allclose(check, result.full())
 
 
-def test_linear_guassian_kalman():
+def test_linear_gaussian_kalman_basic():
+    """Test basic LinearGaussianKalman functionality with LTI_Transition."""
+    # Initialize state: 4D state vector
     init_mean = np.zeros(4)
-    init_cov = np.zeros((4, 4))
+    init_cov = np.eye(4) * 1e-2
     init_state = GaussianRV(init_mean, init_cov)
 
-    A = np.zeros((4, 4))
-    np.fill_diagonal(init_cov, 1e-2)
-    np.fill_diagonal(A, 1)
+    # Transition model: identity (state doesn't change)
+    A = np.eye(4)
+    transition_model = LTI_Transition(A)
+
+    # Process noise
+    process_noise = SimpleProcessNoise((4, 4))
+
+    # Measurement model: observe first 2 components
     H = np.zeros((2, 4))
     H[0, 0] = 1
     H[1, 1] = 1
-    process_noise = ProcessNoiseClass(init_cov.shape)
-    predictor = LinearPredictor(A, process_noise)
-    linear_kalman = LinearGuassianKalman(predictor, H)
+    measurement_model = GenericLinearTransform(H)
 
-    generator = default_rng()
-    measurements = generator.random((10, 2))
-    dt = np.ones((10, 1)) * 1e-1
-    prediction = linear_kalman.predict(init_state, np.array([0.0]))
-    for i in range(measurements.shape[0]):
-        measurement_residual = linear_kalman.innovation(prediction, measurements[i])
-        updated = linear_kalman.update(prediction, measurement_residual)
-        prediction = linear_kalman.predict(updated, dt[i])
+    # Create filter
+    kalman_filter = LinearGaussianKalman(
+        transition_model, process_noise, measurement_model
+    )
+
+    # Generate random measurements
+    generator = default_rng(seed=42)
+    num_steps = 10
+    dt = np.array(0.1)
+
+    state = init_state
+    for _i in range(num_steps):
+        # Predict
+        prediction = kalman_filter.predict(state, dt)
+
+        # Generate measurement
+        meas_val = generator.random(2)
+        meas_cov = np.eye(2) * 0.1
+        measurement = GaussianRV(meas_val, meas_cov)
+
+        # Update
+        innovation = kalman_filter.innovation(prediction, measurement)
+        state = kalman_filter.update(prediction, innovation)
+
+        # Verify state is valid
+        assert state.mean.shape == (4,)
+        assert state.covariance.shape == (4, 4)
+        assert np.all(np.isfinite(state.mean))
 
 
-if __name__ == "__main__":
-    test_linear_guassian_kalman()
+def test_lti_transition():
+    """Test LTI_Transition class."""
+    A = np.array([[1.0, 0.1], [0.0, 1.0]])
+    transition = LTI_Transition(A)
+
+    # Test matrix method
+    dt = np.array(1.0)
+    assert np.allclose(transition.matrix(dt), A)
+
+    # Test transform method
+    state = GaussianRV(np.array([1.0, 2.0]), np.eye(2))
+    transformed = transition.transform(state, dt)
+
+    expected_mean = A @ state.mean
+    assert np.allclose(transformed.mean, expected_mean)
+
+    # Test inverse
+    A_inv = transition.inverse(dt)
+    assert np.allclose(A @ A_inv, np.eye(2))
+
+
+def test_generic_linear_transform():
+    """Test GenericLinearTransform class."""
+    H = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])  # 3x2 matrix
+    transform = GenericLinearTransform(H)
+
+    # Test matrix property
+    assert np.allclose(transform.matrix, H)
+
+    # Test transform method
+    state = GaussianRV(np.array([2.0, 3.0]), np.eye(2) * 0.5)
+    transformed = transform.transform(state)
+
+    expected_mean = H @ state.mean
+    assert np.allclose(transformed.mean, expected_mean)
+    assert transformed.mean.shape == (3,)

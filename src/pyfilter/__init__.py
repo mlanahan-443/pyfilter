@@ -1,7 +1,7 @@
-from pyfilter.filter.linear import LinearGuassianKalman
+from pyfilter.filter.linear import LinearGaussianKalman
 from pyfilter.types.process_noise import ProcessNoise
 
 __all__ = [
-    "LinearGuassianKalman",
+    "LinearGaussianKalman",
     "ProcessNoise",
 ]

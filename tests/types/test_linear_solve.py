@@ -1,12 +1,13 @@
-from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
+import numpy as np
+from scipy.linalg import cholesky
+
 from pyfilter.linear_solve import (
     solve_cholesky_covariance,
-    solve_symmetric_cholesky,
     solve_diagonal_covariance,
+    solve_symmetric_cholesky,
     solve_symmetric_cholesky_dense_array,
 )
-from scipy.linalg import cholesky
-import numpy as np
+from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
 
 np.random.seed(45)
 

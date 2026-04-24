@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kalman_python"
+name = "pyfilter"
 version = "0.1.0"
 description = "A Python implementation of Kalman filtering"
 readme = "README.md"
@@ -13,7 +13,6 @@ authors = [
 ]
 dependencies = [
     "numpy>=1.20.0",
-    "pytest>=9.0.2",
     "pandas>=2.3.3",
     "scipy>=1.17.0"
 ]
@@ -22,9 +21,10 @@ dependencies = [
 dev = [
     "pytest>=6.0",
     "pytest-cov",
-    "black",
     "mypy",
-    "flake8",
+    "ruff",
+    "scipy-stubs", 
+    "pandas-stubs",
 ]
 
 [tool.setuptools.packages.find]
@@ -32,3 +32,38 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 kalman_python = ["py.typed"]  # If you want to include type hints
+
+[tool.mypy]
+files = ["src"]  # your package name
+python_version = "3.13"
+warn_return_any = false  # Too strict for complex covariance union types
+warn_unused_configs = true
+# Allow some flexibility for array indexing and complex union operations
+disable_error_code = ["misc", "call-overload", "index", "assignment"]  # Disable errors for complex numpy/covariance union types that are correct at runtime
+
+[[tool.mypy.overrides]]
+module = "scipy.*"
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length= 88
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear (catches real bugs)
+]
+ignore = [
+    "N806", #I don't like making math variables lower case.
+    "N803", #I don't like making math variables lower case.
+    "N801", #I don't like making math variables lower case.
+    "N802", #I don't like making math variables lower case.
+    "FBT001", #dumb rule 
+    "FBT002", #dumb rule 
+]

@@ -1,8 +1,8 @@
 import numpy as np
-from numpy.random import default_rng
-import scipy.linalg
-from scipy.sparse import dia_matrix
 import scipy
+import scipy.linalg
+from numpy.random import default_rng
+from scipy.sparse import dia_matrix
 
 
 def main():

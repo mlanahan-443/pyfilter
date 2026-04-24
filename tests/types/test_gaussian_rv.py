@@ -2,13 +2,14 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-# --- Imports from your file ---
-# (Assumes gaussian_rv.py is in the same directory)
-from pyfilter.types.random_variables import GaussianRV, DTYPE, FloatArray
 from pyfilter.types.covariance import (
     DiagonalCovariance,
     cholesky_factor,
 )
+
+# --- Imports from your file ---
+# (Assumes gaussian_rv.py is in the same directory)
+from pyfilter.types.random_variables import DTYPE, FloatArray, GaussianRV
 
 # --- Fixtures for reusable test data ---
 

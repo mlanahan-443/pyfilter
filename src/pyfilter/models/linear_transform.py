@@ -1,9 +1,12 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from pyfilter.types.random_variables import GaussianRV
-from pyfilter.hints import FloatArray
 
-type Variable = GaussianRV | FloatArray
+from abc import ABC, abstractmethod
+from typing import Any
+
+from pyfilter.hints import FloatArray
+from pyfilter.types.random_variables import GaussianRV
+
+type Variable = GaussianRV[Any] | FloatArray
 
 
 class LinearTransformBase[State: Variable](ABC):
@@ -26,7 +29,7 @@ class InvertibleLinearTransform[State: Variable](LinearTransformBase[State]):
         """The inverse of the transform."""
 
 
-class GenericLinearTransform[State: Variable](LinearTransformBase):
+class GenericLinearTransform[State: Variable](LinearTransformBase[State]):
     def __init__(self, A: FloatArray) -> None:
         super().__init__()
         self._A = A

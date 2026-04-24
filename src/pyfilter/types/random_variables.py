@@ -1,23 +1,27 @@
 from __future__ import annotations
+
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any, Self, cast
+
 import numpy as np
-from pyfilter.config import DTYPE_ as DTYPE
-from pyfilter.hints import FloatArray, ArrayIndex
-from typing import cast, Callable, Any, Self
 from numpy.typing import ArrayLike
+
+from pyfilter.config import DTYPE_ as DTYPE
+from pyfilter.hints import ArrayIndex, FloatArray
+from pyfilter.linear_solve import solve_symmetric_cholesky
 from pyfilter.types.covariance import (
     CovarianceBase,
-    linear_cross_covariance,
     cholesky_factor,
+    linear_cross_covariance,
 )
-from pyfilter.linear_solve import solve_symmetric_cholesky
 
 CHOLESK_SYMN_ = {"chofactor", "cho", "cholesky", "square-root"}
 ARRAY_SYMN_ = {"array", "np.ndarray", "FloatArray", "Array"}
 COV_SYMN_ = CHOLESK_SYMN_.union(ARRAY_SYMN_)
 
 type CovarianceType = CovarianceBase | FloatArray
-type Variable = GaussianRV | FloatArray | CovarianceBase | float
+type Variable = GaussianRV[Any] | FloatArray | CovarianceBase | float
 
 
 class _ArrayUfuncWrangler:
@@ -27,18 +31,18 @@ class _ArrayUfuncWrangler:
     to the appropriate GaussianRV methods.
     """
 
-    def __init__(self, grv_instance: "GaussianRV"):
+    def __init__(self, grv_instance: GaussianRV[Any]):
         self.grv = grv_instance
 
         # Map ufuncs to corresponding GaussianRV methods
-        self.ufunc_map: dict[Any, Callable] = {
+        self.ufunc_map: dict[Any, Callable[..., Any]] = {
             np.add: self._handle_add,
             np.subtract: self._handle_subtract,
             np.multiply: self._handle_multiply,
             np.matmul: self._handle_matmul,
         }
 
-    def __call__(self, ufunc, method: str, *inputs, **kwargs):
+    def __call__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
         """Main entry point for __array_ufunc__."""
         # We only support '__call__' method, not '__reduce__', '__accumulate__', etc.
         if method != "__call__":
@@ -58,10 +62,10 @@ class _ArrayUfuncWrangler:
 
         return handler(*inputs, **kwargs)
 
-    def _identify_operands(self, *inputs) -> tuple[Any, Any]:
+    def _identify_operands(self, *inputs: Any) -> tuple[GaussianRV[Any], Any]:
         """Identify which operand is the GaussianRV and which is the other."""
         if len(inputs) != 2:
-            return NotImplemented
+            raise NotImplementedError("Expected exactly 2 inputs")
 
         # Determine order: (self, other) or (other, self)
         if isinstance(inputs[0], GaussianRV):
@@ -69,7 +73,7 @@ class _ArrayUfuncWrangler:
         else:
             return inputs[1], inputs[0]
 
-    def _handle_add(self, *inputs, **kwargs):
+    def _handle_add(self, *inputs: Any, **kwargs: Any) -> GaussianRV[Any]:
         """Handle np.add ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
@@ -79,7 +83,7 @@ class _ArrayUfuncWrangler:
         else:
             return grv_operand.__radd__(other_operand)
 
-    def _handle_subtract(self, *inputs, **kwargs):
+    def _handle_subtract(self, *inputs: Any, **kwargs: Any) -> Any:
         """Handle np.subtract ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
@@ -91,7 +95,7 @@ class _ArrayUfuncWrangler:
             # other - grv
             return grv_operand.__rsub__(other_operand)
 
-    def _handle_multiply(self, *inputs, **kwargs):
+    def _handle_multiply(self, *inputs: Any, **kwargs: Any) -> Any:
         """Handle np.multiply ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
@@ -101,7 +105,7 @@ class _ArrayUfuncWrangler:
         else:
             return grv_operand.__rmul__(other_operand)
 
-    def _handle_matmul(self, *inputs, **kwargs):
+    def _handle_matmul(self, *inputs: Any, **kwargs: Any) -> GaussianRV[Any]:
         """Handle np.matmul ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
@@ -119,7 +123,7 @@ class GaussianRV[Covariance: CovarianceType]:
     mean: FloatArray
     covariance: Covariance
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate that mean and covariance have compatible shapes."""
 
         # Check that mean has at least 1 dimension
@@ -155,7 +159,9 @@ class GaussianRV[Covariance: CovarianceType]:
                 f"Batch dimensions of mean {mean_batch} and covariance {cov_batch} must match"
             )
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(
+        self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any
+    ) -> Any:
         """Allow NumPy ufuncs to operate on GaussianRV objects.
 
         Delegates to _ArrayUfuncWrangler for clean ufunc handling.
@@ -165,19 +171,19 @@ class GaussianRV[Covariance: CovarianceType]:
         return wrangler(ufunc, method, *inputs, **kwargs)
 
     @property
-    def shape(self) -> tuple:
+    def shape(self) -> tuple[int, ...]:
         """Return the shape of the mean array."""
         return self.mean.shape
 
     @property
-    def batch_shape(self) -> tuple:
+    def batch_shape(self) -> tuple[int, ...]:
         """Returns the batch shape of the mean array."""
         return self.mean.shape[:-1]
 
     @property
     def length(self) -> int:
-        """The length."""
-        return self.mean.shape[0]
+        """The dimension of the random variable (last dimension of mean)."""
+        return self.mean.shape[-1]
 
     def __len__(self) -> int:
         """Return the dimension of the random variable (last dimension of mean)."""
@@ -202,7 +208,7 @@ class GaussianRV[Covariance: CovarianceType]:
                     f"Covariance with shape: {other.shape} not compatible with {self.covariance.shape}"
                 )
 
-    def __add__(self, other: Variable) -> GaussianRV:
+    def __add__(self, other: Variable) -> GaussianRV[Any]:
         """Add a GaussianRV, constant array, or scalar to this GaussianRV."""
         self._check_compatible(other)
 
@@ -210,57 +216,57 @@ class GaussianRV[Covariance: CovarianceType]:
             # When adding covariances, ensure Covariance objects are on the left
             # to properly invoke their __add__ methods
             if isinstance(self.covariance, CovarianceBase):
-                new_cov = self.covariance + other.covariance
+                new_cov = self.covariance + other.covariance  # type: ignore[operator]
             elif isinstance(other.covariance, CovarianceBase):
-                new_cov = other.covariance + self.covariance
+                new_cov = other.covariance + self.covariance  # type: ignore[operator]
             else:
                 new_cov = self.covariance + other.covariance
 
             return GaussianRV(self.mean + other.mean, new_cov)
         elif isinstance(other, CovarianceBase):
-            return GaussianRV(self.mean, self.covariance + other)
+            return GaussianRV(self.mean, self.covariance + other)  # type: ignore[operator]
         else:  # scalar or array constant
             return GaussianRV(self.mean + other, self.covariance.copy())
 
-    def __radd__(self, other: Variable) -> GaussianRV:
+    def __radd__(self, other: Variable) -> GaussianRV[Any]:
         """Right addition (for scalar/array + GaussianRV)."""
         return self.__add__(other)
 
-    def __sub__(self, other: Variable) -> GaussianRV:
+    def __sub__(self, other: Variable) -> GaussianRV[Any]:
         """Subtract a GaussianRV, constant array, or scalar from this GaussianRV."""
         self._check_compatible(other)
 
         if isinstance(other, GaussianRV):
             # Ensure Covariance objects are on the left for proper method dispatch
             if isinstance(self.covariance, CovarianceBase):
-                new_cov = self.covariance + other.covariance
+                new_cov = self.covariance + other.covariance  # type: ignore[operator]
             elif isinstance(other.covariance, CovarianceBase):
-                new_cov = other.covariance + self.covariance
+                new_cov = other.covariance + self.covariance  # type: ignore[operator]
             else:
                 new_cov = self.covariance + other.covariance
 
             return GaussianRV(self.mean - other.mean, new_cov)
         else:  # scalar or array constant
-            return GaussianRV(self.mean - other, self.covariance.copy())
+            return GaussianRV(self.mean - other, self.covariance.copy())  # type: ignore[operator]
 
-    def __rsub__(self, other: Variable) -> GaussianRV:
+    def __rsub__(self, other: Variable) -> GaussianRV[Any]:
         """Right subtraction (for scalar/array - GaussianRV)."""
         self._check_compatible(other)
         if isinstance(other, GaussianRV):
             # Ensure Covariance objects are on the left for proper method dispatch
             if isinstance(other.covariance, CovarianceBase):
-                new_cov = other.covariance + self.covariance
+                new_cov = other.covariance + self.covariance  # type: ignore[operator]
             elif isinstance(self.covariance, CovarianceBase):
-                new_cov = self.covariance + other.covariance
+                new_cov = self.covariance + other.covariance  # type: ignore[operator]
             else:
                 new_cov = other.covariance + self.covariance
 
             return GaussianRV(other.mean - self.mean, new_cov)
 
         else:
-            return GaussianRV(other - self.mean, self.covariance.copy())
+            return GaussianRV(other - self.mean, self.covariance.copy())  # type: ignore[operator]
 
-    def __mul__(self, other: FloatArray | float) -> GaussianRV:
+    def __mul__(self, other: FloatArray | float) -> GaussianRV[Any]:
         """Multiply GaussianRV by a deterministic matrix or scalar.
 
         For scalar a: Y = aX -> mean_Y = a*mean_X, cov_Y = a²*cov_X
@@ -269,7 +275,7 @@ class GaussianRV[Covariance: CovarianceType]:
         other = np.asarray(other, dtype=DTYPE)
 
         if other.ndim == 0:  # scalar
-            return GaussianRV(self.mean * other, self.covariance * (other**2))
+            return GaussianRV(self.mean * other, self.covariance * (other**2))  # type: ignore[operator]
         elif other.ndim == 1:  # element-wise multiplication
             # Treat as diagonal matrix multiplication
             self._check_compatible(other)
@@ -303,17 +309,17 @@ class GaussianRV[Covariance: CovarianceType]:
 
             return GaussianRV(new_mean, new_cov)
 
-    def __rmul__(self, other: FloatArray | float) -> GaussianRV:
+    def __rmul__(self, other: FloatArray | float) -> GaussianRV[Any]:
         """Right multiplication (for scalar/array * GaussianRV)."""
         return self.__mul__(other)
 
-    def __matmul__(self, other: FloatArray) -> GaussianRV:
+    def __matmul__(self, other: FloatArray) -> GaussianRV[Any]:
         """Matrix multiplication using @ operator (same as __mul__ for matrices)."""
         if not isinstance(other, np.ndarray) or other.ndim < 2:
             raise ValueError("@ operator requires a matrix (array with ndim >= 2)")
         return self.__mul__(other)
 
-    def __rmatmul__(self, other: FloatArray) -> GaussianRV:
+    def __rmatmul__(self, other: FloatArray) -> GaussianRV[Any]:
         """Right matrix multiplication (for A @ self)."""
         # 'other' is the matrix A on the left
         # We can just call our existing __matmul__ method,
@@ -321,54 +327,54 @@ class GaussianRV[Covariance: CovarianceType]:
         return self.__matmul__(other)
 
     # In-place operations
-    def __iadd__(self, other: Variable) -> GaussianRV:
+    def __iadd__(self, other: Variable) -> GaussianRV[Any]:
         """In-place addition."""
         self._check_compatible(other)
 
         if isinstance(other, GaussianRV):
             self.mean += other.mean
             if isinstance(self.covariance, np.ndarray):
-                self.covariance += other.covariance
+                self.covariance += other.covariance  # type: ignore[operator]
             else:
-                self.covariance = self.covariance + other.covariance
+                self.covariance = self.covariance + other.covariance  # type: ignore[operator]
 
         else:
-            self.mean += other
+            self.mean += other  # type: ignore[operator]
         return self
 
-    def __isub__(self, other: Variable) -> GaussianRV:
+    def __isub__(self, other: Variable) -> GaussianRV[Any]:
         """In-place subtraction."""
         self._check_compatible(other)
 
         if isinstance(other, GaussianRV):
             self.mean -= other.mean
             if isinstance(self.covariance, np.ndarray):
-                self.covariance += other.covariance
+                self.covariance += other.covariance  # type: ignore[operator]
             else:
-                self.covariance = self.covariance + other.covariance
+                self.covariance = self.covariance + other.covariance  # type: ignore[operator]
         else:
-            self.mean -= other
+            self.mean -= other  # type: ignore[operator]
         return self
 
-    def __imul__(self, other: float | FloatArray) -> GaussianRV:
+    def __imul__(self, other: float | FloatArray) -> GaussianRV[Any]:
         """In-place multiplication by scalar or diagonal."""
         other = np.asarray(other, dtype=DTYPE)
 
         if other.ndim == 0:  # scalar
             self.mean *= other
             if isinstance(self.covariance, np.ndarray):
-                self.covariance *= other**2
+                self.covariance *= other**2  # type: ignore[assignment]
             else:
-                self.covariance = other[0] ** 2 * self.covariance
+                self.covariance = other[0] ** 2 * self.covariance  # type: ignore[assignment]
 
         elif other.ndim == 1:  # element-wise
             self._check_compatible(other)
             self.mean *= other
             if isinstance(self.covariance, np.ndarray):
                 cov_scale = other[..., :, np.newaxis] * other[..., np.newaxis, :]
-                self.covariance *= cov_scale
+                self.covariance *= cov_scale  # type: ignore[assignment]
             else:
-                self.covariance = self.covariance.quadratic_form(
+                self.covariance = self.covariance.quadratic_form(  # type: ignore[assignment]
                     other[..., :, np.newaxis]
                 )
         else:
@@ -385,7 +391,7 @@ class GaussianRV[Covariance: CovarianceType]:
         )
         return f"GaussianRV(shape={self.shape}, mean_norm={np.linalg.norm(self.mean):.3f}, cov_trace={trace})"
 
-    def __getitem__(self, indices: ArrayIndex) -> GaussianRV:
+    def __getitem__(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """General indexing
 
         Args:
@@ -397,27 +403,27 @@ class GaussianRV[Covariance: CovarianceType]:
 
         return GaussianRV(self.mean[indices], self.covariance[indices])
 
-    def marginal(self, indices: ArrayIndex) -> GaussianRV:
+    def marginal(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """Extract marginal distribution for specified indices."""
         idx = np.atleast_1d(cast("ArrayLike", indices))
         row, col = np.ix_(idx, idx)
         if isinstance(self.covariance, CovarianceBase):
             if isinstance(indices, slice):
-                mcov = self.covariance[..., indices, indices]
+                mcov = self.covariance[..., indices, indices]  # type: ignore[assignment]
             else:
-                mcov = self.covariance.at[..., row, col]
+                mcov = self.covariance.at[..., row, col]  # type: ignore[index,assignment]
 
         else:
-            mcov = self.covariance[..., row, col]
+            mcov = self.covariance[..., row, col]  # type: ignore[index]
 
         return GaussianRV(self.mean[..., indices], mcov)
 
     def conditional(
         self,
-        other: GaussianRV,
+        other: GaussianRV[Any],
         cross_covariance: FloatArray,
         given_value: FloatArray | None = None,
-    ) -> GaussianRV:
+    ) -> GaussianRV[Any]:
         """Compute the conditional distribution of self given other.
 
         Given joint distribution of [X1, X2] where:
@@ -490,14 +496,14 @@ class GaussianRV[Covariance: CovarianceType]:
         # Broadcast all arrays to common batch shape if needed
         if self.mean.shape[:-1] != batch_shape:
             self_mean_bc = np.broadcast_to(self.mean, batch_shape + (n1,))
-            self_cov_bc = np.broadcast_to(self.covariance, batch_shape + (n1, n1))
+            self_cov_bc = np.broadcast_to(self.covariance, batch_shape + (n1, n1))  # type: ignore[arg-type]
         else:
             self_mean_bc = self.mean
             self_cov_bc = self.covariance
 
         if other.mean.shape[:-1] != batch_shape:
             other_mean_bc = np.broadcast_to(other.mean, batch_shape + (n2,))
-            other_cov_bc = np.broadcast_to(other.covariance, batch_shape + (n2, n2))
+            other_cov_bc = np.broadcast_to(other.covariance, batch_shape + (n2, n2))  # type: ignore[arg-type,assignment]
             x2_bc = np.broadcast_to(x2, batch_shape + (n2,))
         else:
             other_mean_bc = other.mean
@@ -536,10 +542,10 @@ class GaussianRV[Covariance: CovarianceType]:
 
     def joint(
         self,
-        other: GaussianRV,
+        other: GaussianRV[Any],
         cross_covariance: FloatArray,
         covariance_type: str = "array",
-    ) -> GaussianRV:
+    ) -> GaussianRV[Any]:
         """Create joint distribution of self and other.
 
         Given:
@@ -643,7 +649,7 @@ class GaussianRV[Covariance: CovarianceType]:
         if isinstance(self.covariance, np.ndarray):
             return np.einsum("...ij,...kj->...ik", self.covariance, A)
 
-        return linear_cross_covariance(self.covariance, A)
+        return linear_cross_covariance(self.covariance, A)  # type: ignore[return-value]
 
     @classmethod
     def zero_mean(cls, covariance: CovarianceType) -> Self:

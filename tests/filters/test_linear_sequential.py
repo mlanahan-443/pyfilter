@@ -1,13 +1,15 @@
+from pathlib import Path
+
 import numpy as np
-from pyfilter.filter.linear import LinearGuassianKalman
+import pandas as pd
+import pytest
+
+from pyfilter.filter.linear import LinearGaussianKalman
+from pyfilter.hints import FloatArray
 from pyfilter.models.linear_transform import LinearTransformBase
 from pyfilter.models.linear_transition import LinearTransitionBase
-from pyfilter.hints import FloatArray
-from pyfilter.types.random_variables import GaussianRV
 from pyfilter.types.process_noise import ProcessNoise
-import pytest
-import pandas as pd
-from pathlib import Path
+from pyfilter.types.random_variables import GaussianRV
 
 
 @pytest.fixture
@@ -54,6 +56,7 @@ class ProcessNoiseModel(ProcessNoise):
         block[..., 0, 1] = block[..., 1, 0] = 0.5 * dt**3
         block[..., 0, 2] = block[..., 2, 0] = 0.5 * dt**2
         block[..., 1, 2] = block[..., 2, 1] = dt
+        block[..., 1, 1] = dt**2
         block[..., 2, 2] = np.ones_like(dt)
 
         zeros = np.zeros_like(block)
@@ -95,9 +98,9 @@ def linear_filter(
     transition_model: TransitionModel,
     process_model: ProcessNoiseModel,
     measurement_model: MeasurementModel,
-) -> LinearGuassianKalman:
+) -> LinearGaussianKalman:
     """The filter to test."""
-    return LinearGuassianKalman(transition_model, process_model, measurement_model)
+    return LinearGaussianKalman(transition_model, process_model, measurement_model)
 
 
 @pytest.fixture
@@ -111,7 +114,7 @@ def measurement_covariance(meas_variance: float) -> FloatArray:
 
 
 def test_linear_filter(
-    linear_filter: LinearGuassianKalman,
+    linear_filter: LinearGaussianKalman,
     measurement_covariance: FloatArray,
     dt: FloatArray,
     data_path: Path,
@@ -127,12 +130,13 @@ def test_linear_filter(
             measurement_covariance[np.newaxis, ...], len(measurement_means), axis=0
         ),
     )
-    state = GaussianRV(np.ones(6), np.diag(np.ones(6)) * 10)
+    state = GaussianRV(np.zeros(6), np.diag(np.ones(6)) * 500)
 
     for i in range(len(measurements)):
         prediction = linear_filter.predict(state, dt)
         innovation = linear_filter.innovation(prediction, measurements[i])
         state = linear_filter.update(prediction, innovation)
-        print(state.mean)
 
-    print(state.mean)
+    # Verify the filter converged to a reasonable estimate
+    assert state.mean.shape == (6,)
+    assert np.all(np.isfinite(state.mean))
