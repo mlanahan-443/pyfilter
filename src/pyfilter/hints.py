@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 from pyfilter.config import DTYPE_
 
 type FloatArray = NDArray[DTYPE_] | NDArray[np.floating[Any]]
+type BoolArray = NDArray[np.bool_]
 
 type IndexItem = (
     int  # Standard integer

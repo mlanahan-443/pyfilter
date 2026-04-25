@@ -5,8 +5,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from pyfilter.models.linear_transform import LinearTransformBase
-from pyfilter.models.linear_transition import LinearTransitionBase
+from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.covariance import CholeskyFactorCovariance, CovarianceBase
 
 from ..hints import FloatArray
