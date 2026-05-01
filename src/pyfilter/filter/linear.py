@@ -8,7 +8,7 @@ import numpy as np
 import scipy
 
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
-from pyfilter.types import Covariance
+from pyfilter.types import Covariance, CovarianceBase
 from pyfilter.types.covariance import CholeskyFactorCovariance
 
 from ..hints import FloatArray
@@ -20,28 +20,37 @@ type Variable = GaussianRV[Any]
 
 @dataclass
 class BaseLinearGaussianKalmanFilter[
-    State: GaussianRV[Covariance],
-    Measurement: GaussianRV[Covariance],
+    StateCovariance: Covariance,
+    MeasurementCovariance: Covariance,
 ](ABC):
     """Base class for linear guassian kalman filter."""
 
-    transition_model: LinearTransitionBase[State]
+    transition_model: LinearTransitionBase[GaussianRV[StateCovariance]]
     process_noise: ProcessNoise
-    measurement_model: LinearTransformBase[State]
+    measurement_model: LinearTransformBase[GaussianRV[MeasurementCovariance]]
+
+    def predict(
+        self, current_state: GaussianRV[StateCovariance], dt: FloatArray
+    ) -> GaussianRV[StateCovariance]:
+        """Predict the state forward."""
+        return self.transition_model.transform(current_state, dt) + self.process_noise(
+            dt
+        )
 
     @abstractmethod
-    def predict(self, current_state: State, dt: FloatArray) -> State:
-        """Prediction method."""
-        ...
-
-    @abstractmethod
-    def update(self, state_prediction: State, residual: State) -> FloatArray:
+    def update(
+        self,
+        state_prediction: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
+    ) -> GaussianRV[StateCovariance]:
         """Update from residual + prediction method."""
         ...
 
     def predicted_measurement(
-        self, state_prediction: State, innovation: Measurement
-    ) -> GaussianRV[Any]:
+        self,
+        state_prediction: GaussianRV[StateCovariance],
+        innovation: GaussianRV[StateCovariance],
+    ) -> GaussianRV[StateCovariance]:
         # The measurement prediction: z ~ N(H @ x_pred, S) where S = innovation.covariance
         # Since innovation.mean = z_obs - H @ x_pred, we have z_obs = innovation.mean + H @ x_pred
         H = self.measurement_model.matrix
@@ -50,22 +59,11 @@ class BaseLinearGaussianKalmanFilter[
         # Create the predicted measurement distribution
         return GaussianRV(predicted_measurement_mean, innovation.covariance)
 
-
-@dataclass
-class LinearGaussianKalman[
-    State: GaussianRV[FloatArray],
-    Measurement: GaussianRV[Covariance],
-](BaseLinearGaussianKalmanFilter[State, Measurement]):
-    """Base linear Gaussian Kalman filter."""
-
-    def predict(self, current_state: State, dt: FloatArray) -> State:
-        return self.transition_model.transform(current_state, dt) + self.process_noise(
-            dt
-        )
-
     def innovation(
-        self, state_prediction: State, measurement: Measurement
-    ) -> Measurement:
+        self,
+        state_prediction: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
+    ) -> GaussianRV[StateCovariance]:
         """Compute the measurement innovation (residual).
 
         Args:
@@ -77,8 +75,18 @@ class LinearGaussianKalman[
         """
         return measurement - self.measurement_model @ state_prediction
 
+
+@dataclass
+class LinearGaussianKalman[
+    StateCovariance: Covariance,
+    MeasurementCovariance: Covariance,
+](BaseLinearGaussianKalmanFilter[StateCovariance, MeasurementCovariance]):
+    """Base linear Gaussian Kalman filter."""
+
     def update(
-        self, state_prediction: State, measurement: Measurement
+        self,
+        state_prediction: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
     ) -> GaussianRV[Any]:
         """Update state using measurement innovation (Kalman filter update step).
 
@@ -112,36 +120,28 @@ class LinearGaussianKalman[
 
 
 class SquareRootLinearGuassianKalman[
-    State: GaussianRV[CholeskyFactorCovariance],
-    Measurement: GaussianRV[Covariance],
-](BaseLinearGaussianKalmanFilter[State, Measurement]):
-    def predict(self, current_state: State, dt: FloatArray) -> State:
-        return self.transition_model.transform(current_state, dt) + self.process_noise(
-            dt
-        )
+    StateCovariance: CholeskyFactorCovariance,
+    MeasurementCovariance: CovarianceBase,
+](BaseLinearGaussianKalmanFilter[StateCovariance, MeasurementCovariance]):
+    """Implements the square root filter.
 
-    def innovation(
-        self, state_prediction: State, measurement: Measurement
-    ) -> Measurement:
-        """Compute the measurement innovation (residual).
+    This filter maintains the covariance of the state as a cholesky factor, vs. the full covariance matrix.
+    This allows for a more efficient update step using a QR decomposition, at the expense of more
+    expensive prediction + other steps.
 
-        Args:
-            state_prediction: Prior state distribution
-            measurement: Observed measurement distribution
+    The measurement covariance must be specified as a covariance type so the cholesky factor can be efficiently
+    computed.
 
-        Returns:
-            Innovation: y = z - H @ x_pred
-        """
-        return measurement - self.measurement_model @ state_prediction
+    """
 
-    def update(self, state_prediction: State, measurement: Measurement) -> State:
+    def update(
+        self,
+        state_prediction: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
+    ) -> GaussianRV[Any]:
         innovation = self.innovation(state_prediction, measurement)
         L_pred = state_prediction.covariance.cholesky_factor  # (n, n)
-        L_R: FloatArray
-        if isinstance(measurement.covariance, np.ndarray):
-            L_R = np.linalg.cholesky(measurement.covariance)
-        else:
-            L_R = measurement.covariance.cholesky_factor
+        L_R = measurement.covariance.cholesky_factor
 
         H = self.measurement_model.matrix  # (m, n)
         n, m = L_pred.shape[-1], L_R.shape[-1]
@@ -154,64 +154,18 @@ class SquareRootLinearGuassianKalman[
         )  # (..., n, m+n)
         A = np.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
-        R = np.linalg.qr(A.mT, mode="r")  # upper-tri (..., m+n, m+n)
-        B = R.mT  # lower-tri
+        B = np.linalg.qr(A.mT, mode="reduced").R  # upper-tri (..., m+n, m+n)
 
-        L_S = B[..., :m, :m]
-        KLS = B[..., m:, :m]
-        L_post = B[..., m:, m:]
+        L_S_T = B[..., :m, :m]
+        KLS_T = B[..., :m, m:]
+        L_post_T = B[..., m:, m:]
 
         # K via triangular solve (cheap)
         # We have KLS = K @ L_S, so K = KLS @ L_S^(-1)
         # Solve L_S.T @ X.T = KLS.T for X, which gives X = KLS @ L_S^(-1)
-        K = scipy.linalg.solve_triangular(L_S.mT, KLS.mT, lower=False).mT
+        K = scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
 
         # mean update
         posterior_mean = state_prediction.mean + K @ innovation.mean
 
-        return GaussianRV(posterior_mean, CholeskyFactorCovariance(L_post))
-
-
-def square_root_quadratic_update(
-    P1: CholeskyFactorCovariance,
-    A1: FloatArray,
-    P2: CholeskyFactorCovariance,
-    A2: FloatArray,
-) -> CholeskyFactorCovariance:
-    """Efficiently computes A1 @ P1 @ A1.T + A2 @ P2 @ A2.T
-
-    By utilizing an efficient QR decomposition on the cholesky factors
-    of the matrices of P1 and P2.
-
-    Let L1 and L2 be the cholesky factors of P1 and P2 respectively.
-    Then A1 @ P1 @ A1.T + A2 @ P2 @ A2.T
-    =(A1 @ L1) @ (A1 @ L1).T + (A2 @ L2) @ (A2 @ L2).T
-    = [A_1 L_1, A_2 L_2] [A_1 L_1, A_2 L_2]^T
-    = M M^T
-
-    and
-
-    M^T = QR
-    MM^T = (QR)^T(QR) = R^T R
-    so R^T = M and since R^T is lower triangular and
-    R^T R = A1 @ P1 @ A1.T + A2 @ P2 @ A2.T
-
-    then R^T is the cholesky factor of the result.
-
-    Args:
-        P1: The first CholeskyFactorCovariance.
-        A1: The first matrix in the quadratic update.
-        P2: The second CholeskyFactorCovariance.
-        A2: The second matrix in the quadratic update.
-
-    Returns:
-        The CholeskyFactorCovariance of the result.
-    """
-
-    W_1 = P1.quadratic_form(A1)
-    W_2 = P2.quadratic_form(A2)
-    M = np.concatenate([W_1.cholesky_factor, W_2.cholesky_factor], axis=-1)
-
-    _, R = np.linalg.qr(M.mT, mode="reduced")
-
-    return CholeskyFactorCovariance(R.mT)
+        return GaussianRV(posterior_mean, CholeskyFactorCovariance(L_post_T.mT))

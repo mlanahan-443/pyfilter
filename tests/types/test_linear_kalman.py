@@ -5,11 +5,10 @@ from numpy.random import default_rng
 from pyfilter.filter.linear import (
     LinearGaussianKalman,
     SquareRootLinearGuassianKalman,
-    square_root_quadratic_update,
 )
 from pyfilter.hints import FloatArray
 from pyfilter.models.linear import GenericLinearTransform, LTI_Transition
-from pyfilter.types.covariance import CholeskyFactorCovariance
+from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 
@@ -106,21 +105,6 @@ class SimpleProcessNoise(ProcessNoise):
 
     def covariance(self, dt: FloatArray) -> GaussianRV:
         return GaussianRV.zero_mean(self._cov)
-
-
-def test_square_root_quadratic_update(
-    A1: np.ndarray,
-    chol_cov1: CholeskyFactorCovariance,
-    A2: np.ndarray,
-    chol_cov2: CholeskyFactorCovariance,
-):
-    result = square_root_quadratic_update(chol_cov1, A1, chol_cov2, A2)
-
-    check = A1 @ chol_cov1.full() @ A1.swapaxes(
-        -2, -1
-    ) + A2 @ chol_cov2.full() @ A2.swapaxes(-2, -1)
-
-    np.testing.assert_allclose(check, result.full())
 
 
 def test_linear_gaussian_kalman_basic():
@@ -247,7 +231,7 @@ def test_square_root_kalman_basic():
 
         # Generate measurement
         meas_val = generator.random(2)
-        meas_cov = np.eye(2) * 0.1
+        meas_cov = DiagonalCovariance(np.ones(2) * 0.1)
         measurement = GaussianRV(meas_val, meas_cov)
 
         # Update directly from measurement
@@ -317,7 +301,7 @@ def test_square_root_kalman_vs_standard():
 
         # Generate measurement
         meas_val = generator.random(4)
-        meas_cov = np.eye(4) * 0.2
+        meas_cov = DiagonalCovariance(np.ones(4) * 0.2)
         measurement_standard = GaussianRV(meas_val.copy(), meas_cov.copy())
         measurement_sq = GaussianRV(meas_val.copy(), meas_cov.copy())
 
@@ -358,7 +342,7 @@ def test_square_root_kalman_innovation():
 
     # Create measurement
     meas_val = np.array([1.5, 2.5])
-    meas_cov = np.eye(2) * 0.1
+    meas_cov = DiagonalCovariance(np.ones(2) * 0.1)
     measurement = GaussianRV(meas_val, meas_cov)
 
     # Compute innovation
@@ -403,7 +387,7 @@ def test_innovation_consistency():
 
     # Measurement
     meas_val = np.array([1.2, 2.3])
-    meas_cov = np.eye(2) * 0.15
+    meas_cov = DiagonalCovariance(np.ones(2) * 0.15)
     measurement = GaussianRV(meas_val, meas_cov)
 
     # Compute innovations
@@ -418,4 +402,10 @@ def test_innovation_consistency():
         if isinstance(innov_sq.covariance, np.ndarray)
         else innov_sq.covariance.full()
     )
-    np.testing.assert_allclose(innov_standard.covariance, innov_sq_cov, rtol=1e-10)
+    innov_standard_cov = (
+        innov_standard.covariance
+        if isinstance(innov_standard.covariance, np.ndarray)
+        else innov_standard.covariance.full()
+    )
+
+    np.testing.assert_allclose(innov_standard_cov, innov_sq_cov, rtol=1e-10)
