@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints import FloatArray
 from pyfilter.types.process_noise import VanLoanProcessNoise, WeinerProcessNoise
 
@@ -17,7 +18,7 @@ def integrator_chain_A(n: int, p: int) -> np.ndarray:
 
 def s(x: float) -> np.ndarray:
     """Convenience: scalar dt as a 0-d array (matches the typed contract)."""
-    return np.asarray(x, dtype=np.float64)
+    return np.asarray(x, dtype=FDTYPE)
 
 
 class TestConstruction:
@@ -74,7 +75,7 @@ class TestConstantAcceleration:
         Qd = noise.covariance(s(dt_val))
 
         I = np.eye(n)
-        Z = np.zeros((n, n))
+        np.zeros((n, n))
         expected = sigma2 * np.block(
             [
                 [(dt_val**5 / 20) * I, (dt_val**4 / 8) * I, (dt_val**3 / 6) * I],
@@ -211,7 +212,7 @@ class TestBatching:
         assert Qd.shape == (3, 4, 4)
 
         # Verify each slice matches a manual scalar computation
-        for i, (dt_i, sigma2) in enumerate(zip(dts, [1.0, 2.0, 3.0])):
+        for i, (dt_i, sigma2) in enumerate(zip(dts, [1.0, 2.0, 3.0], strict=False)):
             ref = WeinerProcessNoise(n=2, p=2, intensity=np.asarray(sigma2))
             np.testing.assert_allclose(
                 Qd[i],

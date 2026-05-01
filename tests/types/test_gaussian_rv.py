@@ -9,7 +9,7 @@ from pyfilter.types.covariance import (
 
 # --- Imports from your file ---
 # (Assumes gaussian_rv.py is in the same directory)
-from pyfilter.types.random_variables import DTYPE, FloatArray, GaussianRV
+from pyfilter.types.random_variables import FDTYPE, FloatArray, GaussianRV
 
 # --- Fixtures for reusable test data ---
 
@@ -26,11 +26,11 @@ def _to_array(cov):
 def covariance_1d(request):
     """Parameterized 1D covariance: array, CholeskyFactorCovariance, DiagonalCovariance."""
     if request.param == "array_1d":
-        return np.array([[4.0]], dtype=DTYPE)
+        return np.array([[4.0]], dtype=FDTYPE)
     elif request.param == "cholesky_1d":
-        return cholesky_factor(np.array([[4.0]], dtype=DTYPE))
+        return cholesky_factor(np.array([[4.0]], dtype=FDTYPE))
     elif request.param == "diagonal_1d":
-        return DiagonalCovariance(np.array([2.0], dtype=DTYPE))
+        return DiagonalCovariance(np.array([2.0], dtype=FDTYPE))
 
 
 @pytest.fixture(
@@ -40,12 +40,12 @@ def covariance_1d(request):
 def covariance_2d(request):
     """Parameterized 2D covariance: array, CholeskyFactorCovariance, DiagonalCovariance."""
     if request.param == "array_2d":
-        cov = np.array([[4.0, 1.0], [1.0, 9.0]], dtype=DTYPE)
+        cov = np.array([[4.0, 1.0], [1.0, 9.0]], dtype=FDTYPE)
     elif request.param == "cholesky_2d":
-        cov = cholesky_factor(np.array([[4.0, 1.0], [1.0, 9.0]], dtype=DTYPE))
+        cov = cholesky_factor(np.array([[4.0, 1.0], [1.0, 9.0]], dtype=FDTYPE))
         print(f"Created cholesky_2d with trace: {cov.trace()}, full: {cov.full()}")
     elif request.param == "diagonal_2d":
-        cov = DiagonalCovariance(np.array([2.0, 3.0], dtype=DTYPE))
+        cov = DiagonalCovariance(np.array([2.0, 3.0], dtype=FDTYPE))
     return cov
 
 
@@ -56,11 +56,11 @@ def covariance_2d(request):
 def covariance_2d_other(request):
     """Parameterized 2D covariance for binary operations."""
     if request.param == "array_2d_other":
-        return np.array([[1.0, 0.0], [0.0, 2.0]], dtype=DTYPE)
+        return np.array([[1.0, 0.0], [0.0, 2.0]], dtype=FDTYPE)
     elif request.param == "cholesky_2d_other":
-        return cholesky_factor(np.array([[1.0, 0.0], [0.0, 2.0]], dtype=DTYPE))
+        return cholesky_factor(np.array([[1.0, 0.0], [0.0, 2.0]], dtype=FDTYPE))
     elif request.param == "diagonal_2d_other":
-        return DiagonalCovariance(np.array([1.0, np.sqrt(2.0)], dtype=DTYPE))
+        return DiagonalCovariance(np.array([1.0, np.sqrt(2.0)], dtype=FDTYPE))
 
 
 @pytest.fixture(
@@ -71,41 +71,41 @@ def covariance_batched(request):
     """Parameterized batched (2, 2, 2) covariance."""
     if request.param == "array_batched":
         return np.array(
-            [[[4.0, 1.0], [1.0, 9.0]], [[1.0, 0.5], [0.5, 1.0]]], dtype=DTYPE
+            [[[4.0, 1.0], [1.0, 9.0]], [[1.0, 0.5], [0.5, 1.0]]], dtype=FDTYPE
         )
     elif request.param == "cholesky_batched":
         return cholesky_factor(
-            np.array([[[4.0, 1.0], [1.0, 9.0]], [[1.0, 0.5], [0.5, 1.0]]], dtype=DTYPE)
+            np.array([[[4.0, 1.0], [1.0, 9.0]], [[1.0, 0.5], [0.5, 1.0]]], dtype=FDTYPE)
         )
     elif request.param == "diagonal_batched":
-        return DiagonalCovariance(np.array([[2.0, 3.0], [1.0, 1.0]], dtype=DTYPE))
+        return DiagonalCovariance(np.array([[2.0, 3.0], [1.0, 1.0]], dtype=FDTYPE))
 
 
 @pytest.fixture
 def grv_1d(covariance_1d) -> GaussianRV:
     """A 1-dimensional GaussianRV."""
-    mean = np.array([1.0], dtype=DTYPE)
+    mean = np.array([1.0], dtype=FDTYPE)
     return GaussianRV(mean, covariance_1d)
 
 
 @pytest.fixture
 def grv_2d(covariance_2d) -> GaussianRV:
     """A 2-dimensional GaussianRV."""
-    mean = np.array([1.0, 2.0], dtype=DTYPE)
+    mean = np.array([1.0, 2.0], dtype=FDTYPE)
     return GaussianRV(mean, covariance_2d)
 
 
 @pytest.fixture
 def grv_2d_other(covariance_2d_other) -> GaussianRV:
     """Another 2-dimensional GaussianRV for binary operations."""
-    mean = np.array([-1.0, 0.5], dtype=DTYPE)
+    mean = np.array([-1.0, 0.5], dtype=FDTYPE)
     return GaussianRV(mean, covariance_2d_other)
 
 
 @pytest.fixture
 def grv_batched(covariance_batched) -> GaussianRV:
     """A batched (batch_size=2) 2-dimensional GaussianRV."""
-    mean = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=DTYPE)  # Shape (2, 2)
+    mean = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=FDTYPE)  # Shape (2, 2)
     return GaussianRV(mean, covariance_batched)
 
 
@@ -118,26 +118,26 @@ def scalar_val() -> float:
 @pytest.fixture
 def array_1d() -> FloatArray:
     """A 1D array compatible with grv_2d."""
-    return np.array([3.0, 4.0], dtype=DTYPE)
+    return np.array([3.0, 4.0], dtype=FDTYPE)
 
 
 @pytest.fixture
 def array_2d_matrix() -> FloatArray:
     """A 2D matrix compatible with grv_2d."""
-    return np.array([[1.0, 0.0], [0.5, 2.0]], dtype=DTYPE)
+    return np.array([[1.0, 0.0], [0.5, 2.0]], dtype=FDTYPE)
 
 
 @pytest.fixture
 def batched_array_1d() -> FloatArray:
     """A batched 1D array compatible with grv_batched."""
-    return np.array([[1.0, 2.0], [3.0, 4.0]], dtype=DTYPE)  # Shape (2, 2)
+    return np.array([[1.0, 2.0], [3.0, 4.0]], dtype=FDTYPE)  # Shape (2, 2)
 
 
 @pytest.fixture
 def batched_matrix() -> FloatArray:
     """A batched 2D matrix compatible with grv_batched."""
     return np.array(
-        [[[1.0, 0.0], [0.5, 2.0]], [[0.0, 1.0], [1.0, 0.0]]], dtype=DTYPE
+        [[[1.0, 0.0], [0.5, 2.0]], [[0.0, 1.0], [1.0, 0.0]]], dtype=FDTYPE
     )  # Shape (2, 2, 2)
 
 
@@ -305,39 +305,6 @@ class TestGaussianRVAddition:
         assert_allclose(_to_array(res.covariance), c1)
         assert isinstance(res, GaussianRV)
 
-    def test_iadd_grv(self, grv_2d, grv_2d_other, covariance_2d, covariance_2d_other):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray) or not isinstance(
-            covariance_2d_other, np.ndarray
-        ):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        # Must copy fixture as it will be modified in-place
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        m2, c2 = grv_2d_other.mean, _to_array(grv_2d_other.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-
-        id_before = id(grv_copy)
-        grv_copy += grv_2d_other
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, m1 + m2)
-        assert_allclose(_to_array(grv_copy.covariance), c1 + c2)
-
-    def test_iadd_scalar(self, grv_2d, scalar_val, covariance_2d):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-
-        id_before = id(grv_copy)
-        grv_copy += scalar_val
-
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, m1 + scalar_val)
-        assert_allclose(_to_array(grv_copy.covariance), c1)  # Unchanged
-
 
 class TestGaussianRVSubtraction:
     """Tests for __sub__, __rsub__, __isub__."""
@@ -389,39 +356,6 @@ class TestGaussianRVSubtraction:
         assert_allclose(res.mean, array_1d - m1)
         assert_allclose(_to_array(res.covariance), c1)
         assert isinstance(res, GaussianRV)
-
-    def test_isub_grv(self, grv_2d, grv_2d_other, covariance_2d, covariance_2d_other):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray) or not isinstance(
-            covariance_2d_other, np.ndarray
-        ):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        m2, c2 = grv_2d_other.mean, _to_array(grv_2d_other.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-
-        id_before = id(grv_copy)
-        grv_copy -= grv_2d_other
-
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, m1 - m2)
-        assert_allclose(_to_array(grv_copy.covariance), c1 + c2)
-
-    def test_isub_scalar(self, grv_2d, scalar_val, covariance_2d):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-
-        id_before = id(grv_copy)
-        grv_copy -= scalar_val
-
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, m1 - scalar_val)
-        assert_allclose(_to_array(grv_copy.covariance), c1)
 
 
 class TestGaussianRVMultiplication:
@@ -475,44 +409,6 @@ class TestGaussianRVMultiplication:
         else:
             with pytest.raises(TypeError):
                 res = grv_2d * array_1d
-
-    def test_imul_scalar(self, grv_2d, scalar_val, covariance_2d):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-        id_before = id(grv_copy)
-
-        grv_copy *= scalar_val
-
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, m1 * scalar_val)
-        assert_allclose(_to_array(grv_copy.covariance), c1 * (scalar_val**2))
-
-    def test_imul_1d_array(self, grv_2d, array_1d, covariance_2d):
-        # Skip test if using covariance objects (no in-place operations supported)
-        if not isinstance(covariance_2d, np.ndarray):
-            pytest.skip("In-place operations not supported for covariance objects")
-
-        m1, c1 = grv_2d.mean, _to_array(grv_2d.covariance)
-        grv_copy = GaussianRV(grv_2d.mean.copy(), grv_2d.covariance.copy())
-        id_before = id(grv_copy)
-
-        grv_copy *= array_1d
-
-        expected_mean = m1 * array_1d
-        cov_scale = array_1d[:, np.newaxis] * array_1d[np.newaxis, :]
-        expected_cov = c1 * cov_scale
-
-        assert id(grv_copy) == id_before
-        assert_allclose(grv_copy.mean, expected_mean)
-        assert_allclose(_to_array(grv_copy.covariance), expected_cov)
-
-    def test_imul_matrix_fail(self, grv_2d, array_2d_matrix):
-        with pytest.raises(ValueError, match="In-place multiplication only supported"):
-            grv_2d *= array_2d_matrix
 
 
 class TestGaussianRVMatMul:

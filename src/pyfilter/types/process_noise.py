@@ -5,6 +5,7 @@ from functools import cached_property
 import numpy as np
 import scipy
 
+from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.types import Covariance
 
 from ..hints import FloatArray
@@ -24,7 +25,7 @@ class ProcessNoise(ABC):
 
 def _full_intensity_matrix(intensity: FloatArray, n: int) -> FloatArray:
     """Normalize ``intensity`` to a full $(..., n, n)$ matrix."""
-    Q = np.asarray(intensity, dtype=np.float64)
+    Q = np.asarray(intensity, dtype=FDTYPE)
     if Q.ndim == 0:
         return Q * np.eye(n)
     if Q.ndim == 1:
@@ -117,9 +118,9 @@ class WeinerProcessNoise(ProcessNoise):
         a_i = a[:, None]  # (p, 1)
         a_j = a[None, :]  # (1, p)
 
-        exponents = (a_i + a_j + 1).astype(np.float64)  # (p, p)
+        exponents = (a_i + a_j + 1).astype(FDTYPE)  # (p, p)
 
-        factorials = scipy.special.factorial(np.arange(self.p)).astype(np.float64)
+        factorials = scipy.special.factorial(np.arange(self.p)).astype(FDTYPE)
         denom = factorials[a_i] * factorials[a_j] * (a_i + a_j + 1)
         coeffs = 1.0 / denom  # (p, p)
         return exponents, coeffs
@@ -164,15 +165,15 @@ class VanLoanProcessNoise(ProcessNoise):
 
 
     .. math::
-        M = \begin{bmatrix} 
-            -A & Q_c \\ 
+        M = \begin{bmatrix}
+            -A & Q_c \\
             0 & A^T
         \end{bmatrix} \Delta t
 
     Then:
     .. math::
         e^{M} = \begin{bmatrix}
-            e^{-A \Delta t} & \int_{0}^1 e^{A (s - 1)} Q_{c} e^{As} ds \\ 
+            e^{-A \Delta t} & \int_{0}^1 e^{A (s - 1)} Q_{c} e^{As} ds \\
             0 & e^{A \Delta t}
         \end{bmatrix}
 
@@ -180,7 +181,7 @@ class VanLoanProcessNoise(ProcessNoise):
 
     Args:
         A: continuous time system matrix.
-        Qc: continuous time process noise. 
+        Qc: continuous time process noise.
 
     # 2-D nearly-constant-velocity (position + velocity, p=2), with isotropic covariance:
     >>> A = np.array([[0,0,1,0],
@@ -212,10 +213,10 @@ class VanLoanProcessNoise(ProcessNoise):
     def coeff(self) -> FloatArray:
         r"""The coefficient $C$ for the matrix $M  = C \Delta t$
         \begin{align*}
-        M = \begin{bmatrix} 
-            -A & Q_c \\ 
+        M = \begin{bmatrix}
+            -A & Q_c \\
             0 & A^T
-        \end{bmatrix} \Delta t \\ 
+        \end{bmatrix} \Delta t \\
         M = C \Delta t
         \end{align*}
         """

@@ -6,8 +6,7 @@ import pytest
 
 from pyfilter.filter.linear import LinearGaussianKalman
 from pyfilter.hints import FloatArray
-from pyfilter.models.linear_transform import LinearTransformBase
-from pyfilter.models.linear_transition import LinearTransitionBase
+from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 

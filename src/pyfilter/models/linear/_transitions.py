@@ -5,6 +5,7 @@ from functools import cached_property
 import numpy as np
 import scipy.special
 
+from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints import BoolArray, FloatArray
 from pyfilter.types import RandomVariable
 
@@ -12,9 +13,7 @@ from ._base import LinearTransitionBase
 
 
 @dataclass(frozen=True)
-class IntegratorChainTransition[State: RandomVariable](
-    LinearTransitionBase[State, FloatArray]
-):
+class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[State]):
     r"""Integrator chain transition for p integrators in n spatial dimensions.
 
     Models the continuous-time system $x \in \mathbb{R}^n$ driven by white
@@ -87,9 +86,9 @@ class IntegratorChainTransition[State: RandomVariable](
         valid = lag >= 0
         lag_safe = np.where(valid, lag, 0)
 
-        factorials = scipy.special.factorial(np.arange(self.p)).astype(np.float64)
+        factorials = scipy.special.factorial(np.arange(self.p)).astype(FDTYPE)
         inv_factorial = 1.0 / factorials[lag_safe]
-        return valid, lag_safe.astype(np.float64), inv_factorial
+        return valid, lag_safe.astype(FDTYPE), inv_factorial
 
     @cached_property
     def _eye_n(self) -> FloatArray:
@@ -123,7 +122,7 @@ class IntegratorChainTransition[State: RandomVariable](
         Returns:
             Array of shape ``(*dt.shape, state_dim, state_dim)``.
         """
-        dt_arr = np.asarray(dt, dtype=np.float64)
+        dt_arr = np.asarray(dt, dtype=FDTYPE)
         valid, exponent, inv_factorial = self._temporal_factors
 
         # Temporal matrix: T[..., i, j] = dt^(j-i) / (j-i)! for j >= i.
@@ -142,7 +141,7 @@ class IntegratorChainTransition[State: RandomVariable](
         For an integrator chain, the inverse has a clean closed form
         and does not require a matrix inversion.
         """
-        return self.matrix(-np.asarray(dt, dtype=np.float64))
+        return self.matrix(-np.asarray(dt, dtype=FDTYPE))
 
     def transform(self, x: State, dt: FloatArray) -> State:
         """Push a state forward by ``dt`` under the discrete-time dynamics.

@@ -479,19 +479,6 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         return CholeskyFactorCovariance(other**0.5 * self.cholesky_factor)
 
-    def __imul__(self, other: float) -> CholeskyFactorCovariance:
-        """In-place multiplication.
-
-        Args:
-            other (float): The scalar value.
-
-        Returns:
-            CholeskyFactorCovariance: self
-        """
-
-        self._L *= other**0.5
-        return self
-
     def quadratic_form(self, other: FloatArray) -> CholeskyFactorCovariance:
         """Computes the quadratic product A @ S @ A.T.
 
@@ -501,7 +488,8 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         A @ S @ A.T = A @ L @ L.T @ A.T = (A @ L) @ (A @ L).T
 
-        and A @ L is thus the resulting cholesky factor.
+        When A is m x n and L is n x n, A @ L is m x n (wide factor).
+        We use QR decomposition to get the square m x m Cholesky factor.
 
         Args:
             other (FloatArray): The matrix A.
@@ -509,8 +497,18 @@ class CholeskyFactorCovariance(CovarianceBase):
         Returns:
             Covariance: The quadratic product of the current covariance.
         """
+        # Compute A @ L (may be wide if A is not square)
+        AL = np.einsum("...ik,...kj->...ij", other, self._L)
 
-        return CholeskyFactorCovariance(np.einsum("...ik,...kj->...ij", other, self._L))
+        # If the result is square, return directly
+        if AL.shape[-2] == AL.shape[-1]:
+            return CholeskyFactorCovariance(AL)
+
+        # Otherwise, use QR to get square Cholesky factor
+        # M M^T = (A @ L) @ (A @ L)^T, and M^T = QR, so R^T is the Cholesky factor
+        qr_result = np.linalg.qr(AL.swapaxes(-2, -1), mode="r")
+        R = qr_result if isinstance(qr_result, np.ndarray) else qr_result[0]
+        return CholeskyFactorCovariance(R.swapaxes(-2, -1))
 
     @performance_monitor(
         warn_threshold=2,
@@ -817,19 +815,6 @@ class DiagonalCovariance(CovarianceBase):
         """
 
         return DiagonalCovariance(other**0.5 * self._D)
-
-    def __imul__(self, other: float) -> DiagonalCovariance:
-        """In-place multiplication.
-
-        Args:
-            other (float): The scalar value.
-
-        Returns:
-            DiagonalCovariance: self
-        """
-
-        self._D *= other**0.5
-        return self
 
     def _is_safe_matrix_slice(self, matrix_indexer: tuple[IndexItem, ...]) -> bool:
         """

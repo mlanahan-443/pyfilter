@@ -11,8 +11,7 @@ from numpy.testing import assert_allclose
 
 from pyfilter.filter.linear import LinearGaussianKalman
 from pyfilter.hints import FloatArray
-from pyfilter.models.linear_transform import LinearTransformBase
-from pyfilter.models.linear_transition import LinearTransitionBase
+from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
@@ -116,35 +115,6 @@ class TestKalmanFilter1D:
         assert_allclose(predicted.mean, np.array([1.0]))
         assert_allclose(predicted.covariance, np.array([[1.0 + 0.1**2]]))
 
-    def test_update_both_methods_agree(self, simple_filter):
-        """Test that conditional and gain-based updates agree"""
-        state = GaussianRV(np.array([1.0]), np.array([[2.0]]))
-        measurement = GaussianRV(np.array([3.0]), np.array([[1.0]]))
-
-        innovation = simple_filter.innovation(state, measurement)
-
-        # Update using conditional method
-        updated_conditional = simple_filter.update(state, innovation)
-
-        # Update using Kalman gain method
-        updated_gain = simple_filter.update_with_gain(state, innovation)
-
-        # Both should give identical results
-        assert_allclose(updated_conditional.mean, updated_gain.mean, rtol=1e-10)
-
-        # Get covariance as arrays for comparison
-        cov_cond = (
-            updated_conditional.covariance
-            if isinstance(updated_conditional.covariance, np.ndarray)
-            else updated_conditional.covariance.full()
-        )
-        cov_gain = (
-            updated_gain.covariance
-            if isinstance(updated_gain.covariance, np.ndarray)
-            else updated_gain.covariance.full()
-        )
-        assert_allclose(cov_cond, cov_gain, rtol=1e-10)
-
     def test_update_analytical_solution(self, simple_filter):
         """Test update against known analytical solution"""
         # Prior: x ~ N(1, 2)
@@ -157,8 +127,7 @@ class TestKalmanFilter1D:
         # x_post = x_pred + K @ (z - H @ x_pred) = 1 + 2/3 * (3 - 1) = 1 + 4/3 = 7/3
         # P_post = (I - K @ H) @ P = (1 - 2/3) * 2 = 2/3
 
-        innovation = simple_filter.innovation(state, measurement)
-        updated = simple_filter.update(state, innovation)
+        updated = simple_filter.update(state, measurement)
 
         assert_allclose(updated.mean, np.array([7.0 / 3.0]), rtol=1e-10)
         cov = (
@@ -181,8 +150,7 @@ class TestKalmanFilter1D:
 
         for meas in measurements:
             state = simple_filter.predict(state, dt)
-            innovation = simple_filter.innovation(state, meas)
-            state = simple_filter.update(state, innovation)
+            state = simple_filter.update(state, meas)
 
         # After seeing measurements [1, 2, 3] with low measurement noise,
         # the filter should be influenced by the measurements
@@ -230,30 +198,6 @@ class TestKalmanFilter2D:
         # Velocity should stay the same
         assert_allclose(predicted.mean[1], 1.0, rtol=1e-10)
 
-    def test_update_both_methods_agree_2d(self, cv_filter):
-        """Test that both update methods agree for 2D case"""
-        state = GaussianRV(np.array([1.0, 0.5]), np.array([[2.0, 0.1], [0.1, 0.5]]))
-        measurement = GaussianRV(np.array([2.0]), np.array([[1.0]]))
-
-        innovation = cv_filter.innovation(state, measurement)
-
-        updated_conditional = cv_filter.update(state, innovation)
-        updated_gain = cv_filter.update_with_gain(state, innovation)
-
-        assert_allclose(updated_conditional.mean, updated_gain.mean, rtol=1e-10)
-
-        cov_cond = (
-            updated_conditional.covariance
-            if isinstance(updated_conditional.covariance, np.ndarray)
-            else updated_conditional.covariance.full()
-        )
-        cov_gain = (
-            updated_gain.covariance
-            if isinstance(updated_gain.covariance, np.ndarray)
-            else updated_gain.covariance.full()
-        )
-        assert_allclose(cov_cond, cov_gain, rtol=1e-10)
-
     def test_tracking_constant_velocity(self, cv_filter):
         """Test tracking an object with constant velocity"""
         # True trajectory: x(t) = 10*t, v = 10
@@ -280,8 +224,7 @@ class TestKalmanFilter2D:
             )
 
             # Update
-            innovation = cv_filter.innovation(state, meas)
-            state = cv_filter.update(state, innovation)
+            state = cv_filter.update(state, meas)
 
         # After several measurements, should track well
         # Position estimate should be close to true position
@@ -337,8 +280,7 @@ class TestCovarianceTypes:
 
         dt = np.array(1.0)
         predicted = kalman_filter.predict(state, dt)
-        innovation = kalman_filter.innovation(predicted, measurement)
-        updated = kalman_filter.update(predicted, innovation)
+        updated = kalman_filter.update(predicted, measurement)
 
         # Should complete without error
         assert updated.mean.shape == (1,)
@@ -366,8 +308,7 @@ class TestBatchProcessing:
         for meas_val in measurements:
             state = simple_filter.predict(state, dt)
             meas = GaussianRV(np.array([meas_val]), np.array([[0.5]]))
-            innovation = simple_filter.innovation(state, meas)
-            state = simple_filter.update(state, innovation)
+            state = simple_filter.update(state, meas)
 
         # State should be close to the last measurement
         assert state.mean.shape == (1,)
@@ -388,8 +329,7 @@ class TestEdgeCases:
         # Perfect measurement (zero noise)
         meas = GaussianRV(np.array([5.0]), np.array([[1e-10]]))
 
-        innovation = kalman_filter.innovation(state, meas)
-        updated = kalman_filter.update(state, innovation)
+        updated = kalman_filter.update(state, meas)
 
         # With perfect measurement, state should match measurement closely
         assert_allclose(updated.mean, np.array([5.0]), atol=1e-5)
@@ -405,8 +345,7 @@ class TestEdgeCases:
         # Very noisy measurement
         meas = GaussianRV(np.array([100.0]), np.array([[1000.0]]))
 
-        innovation = kalman_filter.innovation(state, meas)
-        updated = kalman_filter.update(state, innovation)
+        updated = kalman_filter.update(state, meas)
 
         # With very noisy measurement, state should stay close to prior
         assert_allclose(updated.mean, state.mean, atol=0.5)

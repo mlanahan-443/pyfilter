@@ -380,22 +380,6 @@ class TestCholeskyFactorCovariance:
         assert_allclose(result.full(), expected_P)
         assert_allclose(result.cholesky_factor, expected_L)
 
-    def test_imul(self, P_full: np.ndarray, L_factor: np.ndarray):
-        """Tests __imul__ by a scalar."""
-        chol_cov = CholeskyFactorCovariance(L_factor.copy())
-        scalar = 9.0
-
-        result = chol_cov.__imul__(scalar)
-
-        expected_P = P_full * scalar
-        expected_L = L_factor * (scalar**0.5)
-
-        # Check that the original object was modified
-        assert_allclose(chol_cov.full(), expected_P)
-        assert_allclose(chol_cov.cholesky_factor, expected_L)
-        # Check that the returned object is the same object
-        assert result is chol_cov
-
     def test_quadratic_form(
         self,
         chol_cov: CholeskyFactorCovariance,
@@ -557,18 +541,6 @@ class TestDiagonalCovariance:
         assert isinstance(result, DiagonalCovariance)
         assert_allclose(result.full(), expected_P)
         assert_allclose(result._D, expected_std)
-
-    def test_imul(self, diag_std: np.ndarray):
-        """Tests __imul__ by a scalar."""
-        diag_cov = DiagonalCovariance(diag_std.copy())
-        scalar = 4.0
-
-        result = diag_cov.__imul__(scalar)
-
-        expected_std = diag_std * (scalar**0.5)
-
-        assert_allclose(diag_cov._D, expected_std)
-        assert result is diag_cov
 
     def test_quadratic_form(
         self, diag_cov: DiagonalCovariance, diag_std: np.ndarray, A_matrix: np.ndarray

@@ -42,11 +42,11 @@ class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
         return self._A @ x
 
 
-class LinearTransitionBase[State: RandomVariable, Time: FloatArray](ABC):
+class LinearTransitionBase[State: RandomVariable](ABC):
     """Base linear transition."""
 
     @abstractmethod
-    def transform(self, x: State, dt: Time) -> State:
+    def transform(self, x: State, dt: FloatArray) -> State:
         """Transform the state x(k) -> x(k+1)"""
 
 
@@ -65,15 +65,13 @@ class HasInverse(Protocol):
 
 
 @runtime_checkable
-class HasInverseTransform[State: RandomVariable, Time: FloatArray](Protocol):
+class HasInverseTransform[State: RandomVariable](Protocol):
     """Transition is invertible."""
 
-    def inverse_transform(self, x: State, dt: Time) -> State: ...
+    def inverse_transform(self, x: State, dt: FloatArray) -> State: ...
 
 
-class LTI_Transition[State: RandomVariable, Time: FloatArray](
-    LinearTransitionBase[State, Time]
-):
+class LTI_Transition[State: RandomVariable](LinearTransitionBase[State]):
     def __init__(self, A: FloatArray) -> None:
         super().__init__()
         self._A = A
@@ -81,8 +79,8 @@ class LTI_Transition[State: RandomVariable, Time: FloatArray](
     def matrix(self, dt: FloatArray) -> FloatArray:
         return self._A
 
-    def transform(self, x: State, dt: Time) -> State:
+    def transform(self, x: State, dt: FloatArray) -> State:
         return self._A @ x
 
-    def inverse(self, dt: Time) -> FloatArray:
+    def inverse(self, dt: FloatArray) -> FloatArray:
         return np.linalg.inv(self._A)

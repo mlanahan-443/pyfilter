@@ -5,6 +5,7 @@ from ._base import (
     HasMatrix,
     LinearTransformBase,
     LinearTransitionBase,
+    LTI_Transition,
 )
 from ._transitions import IntegratorChainTransition
 
@@ -16,4 +17,5 @@ __all__ = [
     "HasMatrix",
     "IntegratorChainTransition",
     "GenericLinearTransform",
+    "LTI_Transition",
 ]

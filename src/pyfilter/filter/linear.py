@@ -1,49 +1,84 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
 import numpy as np
+import scipy
 
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
-from pyfilter.types.covariance import CholeskyFactorCovariance, CovarianceBase
+from pyfilter.types import Covariance
+from pyfilter.types.covariance import CholeskyFactorCovariance
 
 from ..hints import FloatArray
-from ..linear_solve import solve_symmetric_cholesky
 from ..types.process_noise import ProcessNoise
 from ..types.random_variables import GaussianRV
 
-type Covariance = FloatArray | CholeskyFactorCovariance
 type Variable = GaussianRV[Any]
 
 
-class KalmanFilter[State, Time](Protocol):
-    def predict(self, current_state: State, dt: Time) -> State: ...
+@dataclass
+class BaseLinearGaussianKalmanFilter[
+    State: GaussianRV[Covariance],
+    Measurement: GaussianRV[Covariance],
+](ABC):
+    """Base class for linear guassian kalman filter."""
 
-    def update(self, state_prediction: State, residual: State) -> Time: ...
+    transition_model: LinearTransitionBase[State]
+    process_noise: ProcessNoise
+    measurement_model: LinearTransformBase[State]
 
-    def innovation(self, state_prediction: State, measurement: State) -> State: ...
+    @abstractmethod
+    def predict(self, current_state: State, dt: FloatArray) -> State:
+        """Prediction method."""
+        ...
+
+    @abstractmethod
+    def update(self, state_prediction: State, residual: State) -> FloatArray:
+        """Update from residual + prediction method."""
+        ...
+
+    def predicted_measurement(
+        self, state_prediction: State, innovation: Measurement
+    ) -> GaussianRV[Any]:
+        # The measurement prediction: z ~ N(H @ x_pred, S) where S = innovation.covariance
+        # Since innovation.mean = z_obs - H @ x_pred, we have z_obs = innovation.mean + H @ x_pred
+        H = self.measurement_model.matrix
+        predicted_measurement_mean = H @ state_prediction.mean
+
+        # Create the predicted measurement distribution
+        return GaussianRV(predicted_measurement_mean, innovation.covariance)
 
 
 @dataclass
 class LinearGaussianKalman[
-    State: GaussianRV[Any],
-    Measurement: GaussianRV[Any],
-    Time: FloatArray,
-]:
+    State: GaussianRV[FloatArray],
+    Measurement: GaussianRV[Covariance],
+](BaseLinearGaussianKalmanFilter[State, Measurement]):
     """Base linear Gaussian Kalman filter."""
 
-    transition_model: LinearTransitionBase[State, Time]
-    process_noise: ProcessNoise
-    measurement_model: LinearTransformBase[State]
-
-    def predict(self, current_state: State, dt: Time) -> State:
+    def predict(self, current_state: State, dt: FloatArray) -> State:
         return self.transition_model.transform(current_state, dt) + self.process_noise(
             dt
         )
 
+    def innovation(
+        self, state_prediction: State, measurement: Measurement
+    ) -> Measurement:
+        """Compute the measurement innovation (residual).
+
+        Args:
+            state_prediction: Prior state distribution
+            measurement: Observed measurement distribution
+
+        Returns:
+            Innovation: y = z - H @ x_pred
+        """
+        return measurement - self.measurement_model @ state_prediction
+
     def update(
-        self, state_prediction: State, innovation: Measurement
+        self, state_prediction: State, measurement: Measurement
     ) -> GaussianRV[Any]:
         """Update state using measurement innovation (Kalman filter update step).
 
@@ -66,20 +101,23 @@ class LinearGaussianKalman[
         # Compute cross-covariance: Cov(x, z) = P @ H.T
         cross_covariance = state_prediction.linear_cross(self.measurement_model.matrix)
 
-        # The measurement prediction: z ~ N(H @ x_pred, S) where S = innovation.covariance
-        # Since innovation.mean = z_obs - H @ x_pred, we have z_obs = innovation.mean + H @ x_pred
-        H = self.measurement_model.matrix
-        predicted_measurement_mean = H @ state_prediction.mean
-        measurement_value = innovation.mean + predicted_measurement_mean
-
-        # Create the predicted measurement distribution
-        predicted_measurement = GaussianRV(
-            predicted_measurement_mean, innovation.covariance
-        )
+        innovation = self.innovation(state_prediction, measurement)
+        predicted_measurement = self.predicted_measurement(state_prediction, innovation)
+        measurement_value = innovation.mean + predicted_measurement.mean
 
         # Compute conditional: x | z = z_obs
         return state_prediction.conditional(
             predicted_measurement, cross_covariance, given_value=measurement_value
+        )
+
+
+class SquareRootLinearGuassianKalman[
+    State: GaussianRV[CholeskyFactorCovariance],
+    Measurement: GaussianRV[Covariance],
+](BaseLinearGaussianKalmanFilter[State, Measurement]):
+    def predict(self, current_state: State, dt: FloatArray) -> State:
+        return self.transition_model.transform(current_state, dt) + self.process_noise(
+            dt
         )
 
     def innovation(
@@ -96,68 +134,42 @@ class LinearGaussianKalman[
         """
         return measurement - self.measurement_model @ state_prediction
 
-    def update_with_gain(
-        self, state_prediction: State, innovation: Measurement
-    ) -> GaussianRV[Any]:
-        """Update state using classical Kalman gain formulation.
-
-        This is an alternative to the conditional-based update() method,
-        implementing the classical Kalman filter equations:
-        - K = P @ H.T @ S^(-1)
-        - x_post = x_pred + K @ y
-        - P_post = P - K @ S @ K.T
-
-        Args:
-            state_prediction: Prior state distribution x ~ N(x_pred, P)
-            innovation: Innovation distribution y ~ N(y_obs, S)
-
-        Returns:
-            Posterior state distribution x | z ~ N(x_post, P_post)
-        """
-        H = self.measurement_model.matrix
-        P = state_prediction.covariance
-        S = innovation.covariance  # S = H @ P @ H.T + R
-        y = innovation.mean
-
-        # Compute cross-covariance: Cov(x, z) = P @ H.T
-        if isinstance(P, CovarianceBase):
-            P_HT = P.full() @ H.T
+    def update(self, state_prediction: State, measurement: Measurement) -> State:
+        innovation = self.innovation(state_prediction, measurement)
+        L_pred = state_prediction.covariance.cholesky_factor  # (n, n)
+        L_R: FloatArray
+        if isinstance(measurement.covariance, np.ndarray):
+            L_R = np.linalg.cholesky(measurement.covariance)
         else:
-            P_HT = P @ H.T
+            L_R = measurement.covariance.cholesky_factor
 
-        # Compute Kalman gain: K = P @ H.T @ S^(-1)
-        # We solve: S @ K.T = (P @ H.T).T for K.T, then transpose
-        if isinstance(S, CovarianceBase):
-            K = solve_symmetric_cholesky(S, P_HT.swapaxes(-1, -2)).swapaxes(-1, -2)
-        else:
-            K = solve_symmetric_cholesky(S, P_HT.swapaxes(-1, -2)).swapaxes(-1, -2)
+        H = self.measurement_model.matrix  # (m, n)
+        n, m = L_pred.shape[-1], L_R.shape[-1]
 
-        # Updated mean: x_post = x_pred + K @ y
-        updated_mean = state_prediction.mean + np.einsum("...ij,...j->...i", K, y)
+        # Pre-array (supports batching via leading dims)
+        HL = H @ L_pred  # (..., m, n)
+        top = np.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
+        bottom = np.concatenate(
+            [np.zeros((*L_pred.shape[:-2], n, m)), L_pred], axis=-1
+        )  # (..., n, m+n)
+        A = np.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
-        # Updated covariance: P_post = P - K @ S @ K.T
-        if isinstance(P, CovarianceBase):
-            P_full = P.full()
-        else:
-            P_full = P
+        R = np.linalg.qr(A.mT, mode="r")  # upper-tri (..., m+n, m+n)
+        B = R.mT  # lower-tri
 
-        if isinstance(S, CovarianceBase):
-            S_full = S.full()
-        else:
-            S_full = S
+        L_S = B[..., :m, :m]
+        KLS = B[..., m:, :m]
+        L_post = B[..., m:, m:]
 
-        # K @ S @ K.T
-        temp = np.einsum("...ij,...jk->...ik", K, S_full)
-        K_S_KT = np.einsum("...ij,...kj->...ik", temp, K)
-        updated_cov = P_full - K_S_KT
+        # K via triangular solve (cheap)
+        # We have KLS = K @ L_S, so K = KLS @ L_S^(-1)
+        # Solve L_S.T @ X.T = KLS.T for X, which gives X = KLS @ L_S^(-1)
+        K = scipy.linalg.solve_triangular(L_S.mT, KLS.mT, lower=False).mT
 
-        # Return with same covariance type as input if possible
-        if isinstance(P, CholeskyFactorCovariance):
-            from pyfilter.types.covariance import cholesky_factor
+        # mean update
+        posterior_mean = state_prediction.mean + K @ innovation.mean
 
-            return GaussianRV(updated_mean, cholesky_factor(updated_cov))
-        else:
-            return GaussianRV(updated_mean, updated_cov)
+        return GaussianRV(posterior_mean, CholeskyFactorCovariance(L_post))
 
 
 def square_root_quadratic_update(
@@ -200,6 +212,6 @@ def square_root_quadratic_update(
     W_2 = P2.quadratic_form(A2)
     M = np.concatenate([W_1.cholesky_factor, W_2.cholesky_factor], axis=-1)
 
-    _, R = np.linalg.qr(M.swapaxes(-1, -2), mode="reduced")
+    _, R = np.linalg.qr(M.mT, mode="reduced")
 
-    return CholeskyFactorCovariance(R.swapaxes(-1, -2))
+    return CholeskyFactorCovariance(R.mT)
