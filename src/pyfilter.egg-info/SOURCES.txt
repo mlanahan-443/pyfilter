@@ -13,12 +13,13 @@ src/pyfilter.egg-info/requires.txt
 src/pyfilter.egg-info/top_level.txt
 src/pyfilter/filter/linear.py
 src/pyfilter/models/__init__.py
-src/pyfilter/models/linear_transform.py
-src/pyfilter/models/linear_transition.py
+src/pyfilter/models/_discretization.py
+src/pyfilter/models/linear/__init__.py
+src/pyfilter/models/linear/_base.py
+src/pyfilter/models/linear/_transitions.py
 src/pyfilter/types/__init__.py
 src/pyfilter/types/covariance.py
 src/pyfilter/types/process_noise.py
 src/pyfilter/types/random_variables.py
 src/sandbox/mat_mulspeed.py
 src/sandbox/quad_prod_update.py
-tests/test_util.py

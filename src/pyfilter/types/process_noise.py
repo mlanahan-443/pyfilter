@@ -4,9 +4,10 @@ from functools import cached_property
 
 import numpy as np
 import scipy
+from numpy.typing import DTypeLike
 
 from pyfilter.config import FDTYPE_ as FDTYPE
-from pyfilter.types import Covariance
+from pyfilter.types import Covariance, CovarianceBase, GaussianRV
 
 from ..hints import FloatArray
 
@@ -16,18 +17,20 @@ class ProcessNoise(ABC):
         self.shape = shape
 
     @abstractmethod
-    def covariance(self, dt: FloatArray) -> Covariance:
+    def covariance(self, dt: FloatArray) -> GaussianRV | CovarianceBase:
         pass
 
-    def __call__(self, dt: FloatArray) -> Covariance:
+    def __call__(self, dt: FloatArray) -> CovarianceBase:
         return self.covariance(dt)
 
 
-def _full_intensity_matrix(intensity: FloatArray, n: int) -> FloatArray:
+def _full_intensity_matrix(
+    intensity: FloatArray, n: int, dtype: DTypeLike = FDTYPE
+) -> FloatArray:
     """Normalize ``intensity`` to a full $(..., n, n)$ matrix."""
-    Q = np.asarray(intensity, dtype=FDTYPE)
+    Q = np.asarray(intensity, dtype=dtype)
     if Q.ndim == 0:
-        return Q * np.eye(n)
+        return Q * np.eye(n, dtype=Q.dtype)
     if Q.ndim == 1:
         if Q.shape[0] != n:
             raise ValueError(f"1-D intensity must have length {n}, got {Q.shape}")
@@ -95,6 +98,7 @@ class WeinerProcessNoise(ProcessNoise):
     n: int
     p: int
     intensity: FloatArray
+    dtype: DTypeLike = FDTYPE
 
     def __post_init__(self) -> None:
         if self.n < 1 or self.p < 1:
@@ -114,22 +118,23 @@ class WeinerProcessNoise(ProcessNoise):
         ``tau[i, j] = dt ** exponents[i, j] * coeffs[i, j]``.
         """
         # a_i = p - 1 - i
-        a = (self.p - 1) - np.arange(self.p)  # (p,)
-        a_i = a[:, None]  # (p, 1)
-        a_j = a[None, :]  # (1, p)
+        prange = np.arange(self.p)
+        a = (self.p - 1) - prange  # (p,)
+        a_i = a[:, np.newaxis]  # (p, 1)
+        a_j = a[np.newaxis, :]  # (1, p)
 
-        exponents = (a_i + a_j + 1).astype(FDTYPE)  # (p, p)
+        exponents = a_i + a_j + 1  # (p, p)
 
-        factorials = scipy.special.factorial(np.arange(self.p)).astype(FDTYPE)
-        denom = factorials[a_i] * factorials[a_j] * (a_i + a_j + 1)
-        coeffs = 1.0 / denom  # (p, p)
-        return exponents, coeffs
+        factorials = scipy.special.factorial(prange)
+        denom = factorials[a_i] * factorials[a_j] * exponents
+        coeffs = 1.0 / denom.astype(self.dtype)  # (p, p)
+        return exponents.astype(self.dtype), coeffs
 
     @cached_property
     def _intensity_matrix(self) -> FloatArray:
-        return _full_intensity_matrix(self.intensity, self.n)
+        return _full_intensity_matrix(self.intensity, self.n, dtype=self.dtype)
 
-    def covariance(self, dt: FloatArray) -> FloatArray:
+    def covariance(self, dt: FloatArray) -> Covariance:
         """Discrete process noise covariance $Q_d(\\Delta t)$.
 
         Args:
@@ -200,6 +205,7 @@ class VanLoanProcessNoise(ProcessNoise):
 
     A: FloatArray
     Qc: FloatArray
+    dtype: type = FDTYPE
 
     def __post_init__(self):
         shape = np.broadcast_shapes(self.A.shape, self.Qc.shape)
@@ -223,7 +229,7 @@ class VanLoanProcessNoise(ProcessNoise):
         Q = self.Qc
         A = self.A
         n = self.n
-        coeff = np.zeros((*A.shape[:-2], 2 * n, 2 * n), dtype=np.result_type(Q, A))
+        coeff = np.zeros((*A.shape[:-2], 2 * n, 2 * n), dtype=A.dtype)
         coeff[..., :n, :n] = -A
         coeff[..., :n, n:] = Q
         coeff[..., n:, n:] = A.mT

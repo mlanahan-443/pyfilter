@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+from numpy.typing import ArrayLike, DTypeLike
 
+from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints import FloatArray
-from pyfilter.types import RandomVariable
+from pyfilter.types import Covariance, RandomVariable
 
 
+@dataclass(frozen=True)
 class LinearTransformBase[State: RandomVariable](ABC):
+    dtype: DTypeLike = FDTYPE
+
     @property
     @abstractmethod
     def matrix(self) -> FloatArray:
@@ -19,20 +25,22 @@ class LinearTransformBase[State: RandomVariable](ABC):
     def transform(self, x: State) -> State:
         """Transform the state."""
 
+    @abstractmethod
+    def transform_array[arrT: ArrayLike](self, x: arrT) -> arrT:
+        """Transform an array."""
+
+    @abstractmethod
+    def transform_covariance[covT: Covariance](self, cov: covT) -> covT:
+        """Transform a covariance."""
+
     def __matmul__(self, x: State) -> State:
         return self.transform(x)
 
 
-class InvertibleLinearTransform[State: RandomVariable](LinearTransformBase[State]):
-    @abstractmethod
-    def inverse(self) -> FloatArray:
-        """The inverse of the transform."""
-
-
 class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
-    def __init__(self, A: FloatArray) -> None:
-        super().__init__()
+    def __init__(self, A: FloatArray):
         self._A = A
+        self.__setattr__("dtype", self._A.dtype)
 
     @property
     def matrix(self) -> FloatArray:
@@ -41,9 +49,25 @@ class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
     def transform(self, x: State) -> State:
         return self._A @ x
 
+    def transform_array[arrT: ArrayLike](self, x: arrT) -> arrT:
+        return self._A @ x
 
+    @abstractmethod
+    def transform_covariance[covT: Covariance](self, cov: covT) -> covT:
+        """Transform a covariance."""
+        if isinstance(cov, np.ndarray):
+            return np.einsum(
+                "...ij,...jk,...lk->...il", self._A, cov, self._A, optimize=True
+            )
+
+        return cov.quadratic_form(self._A)
+
+
+@dataclass(frozen=True)
 class LinearTransitionBase[State: RandomVariable](ABC):
     """Base linear transition."""
+
+    dtype: DTypeLike = FDTYPE
 
     @abstractmethod
     def transform(self, x: State, dt: FloatArray) -> State:
@@ -73,7 +97,7 @@ class HasInverseTransform[State: RandomVariable](Protocol):
 
 class LTI_Transition[State: RandomVariable](LinearTransitionBase[State]):
     def __init__(self, A: FloatArray) -> None:
-        super().__init__()
+        super().__init__(dtype=A.dtype)
         self._A = A
 
     def matrix(self, dt: FloatArray) -> FloatArray:

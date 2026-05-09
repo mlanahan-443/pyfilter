@@ -3,9 +3,7 @@ from types import EllipsisType
 import numpy as np
 from numpy.typing import NDArray
 
-from pyfilter.config import FDTYPE_
-
-type FloatArray = NDArray[FDTYPE_]
+type FloatArray = NDArray[np.floating]
 type BoolArray = NDArray[np.bool_]
 type VoidArray = NDArray[np.void]
 type IntArr = NDArray[np.integer]

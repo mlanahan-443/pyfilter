@@ -33,9 +33,9 @@ class BaseLinearGaussianKalmanFilter[
         self, current_state: GaussianRV[StateCovariance], dt: FloatArray
     ) -> GaussianRV[StateCovariance]:
         """Predict the state forward."""
-        return self.transition_model.transform(current_state, dt) + self.process_noise(
-            dt
-        )
+        xp = self.transition_model.transform(current_state, dt)
+        Q = self.process_noise(dt)
+        return GaussianRV(xp.mean, xp.covariance + Q)
 
     @abstractmethod
     def update(
@@ -53,8 +53,9 @@ class BaseLinearGaussianKalmanFilter[
     ) -> GaussianRV[StateCovariance]:
         # The measurement prediction: z ~ N(H @ x_pred, S) where S = innovation.covariance
         # Since innovation.mean = z_obs - H @ x_pred, we have z_obs = innovation.mean + H @ x_pred
-        H = self.measurement_model.matrix
-        predicted_measurement_mean = H @ state_prediction.mean
+        predicted_measurement_mean = self.measurement_model.transform_array(
+            state_prediction.mean
+        )
 
         # Create the predicted measurement distribution
         return GaussianRV(predicted_measurement_mean, innovation.covariance)
@@ -142,15 +143,13 @@ class SquareRootLinearGuassianKalman[
         innovation = self.innovation(state_prediction, measurement)
         L_pred = state_prediction.covariance.cholesky_factor  # (n, n)
         L_R = measurement.covariance.cholesky_factor
-
-        H = self.measurement_model.matrix  # (m, n)
         n, m = L_pred.shape[-1], L_R.shape[-1]
 
         # Pre-array (supports batching via leading dims)
-        HL = H @ L_pred  # (..., m, n)
+        HL = self.measurement_model.matrix @ L_pred  # (..., m, n)
         top = np.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
         bottom = np.concatenate(
-            [np.zeros((*L_pred.shape[:-2], n, m)), L_pred], axis=-1
+            [np.zeros((*L_pred.shape[:-2], n, m), dtype=L_pred.dtype), L_pred], axis=-1
         )  # (..., n, m+n)
         A = np.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
@@ -166,6 +165,8 @@ class SquareRootLinearGuassianKalman[
         K = scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
 
         # mean update
-        posterior_mean = state_prediction.mean + K @ innovation.mean
+        posterior_mean = state_prediction.mean + np.einsum(
+            "...ij,...j->...i", K, innovation.mean
+        )
 
         return GaussianRV(posterior_mean, CholeskyFactorCovariance(L_post_T.mT))

@@ -56,10 +56,15 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         9
     """
 
-    n: int
-    p: int
+    n: int | None = None
+    p: int | None = None
 
     def __post_init__(self) -> None:
+        if self.n is None:
+            raise ValueError("n must not be None")
+        if self.p is None:
+            raise ValueError("p must not be None")
+
         if self.n < 1:
             raise ValueError(f"n must be >= 1, got {self.n}")
         if self.p < 1:
@@ -86,14 +91,14 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         valid = lag >= 0
         lag_safe = np.where(valid, lag, 0)
 
-        factorials = scipy.special.factorial(np.arange(self.p)).astype(FDTYPE)
+        factorials = scipy.special.factorial(np.arange(self.p)).astype(lag_safe.dtype)
         inv_factorial = 1.0 / factorials[lag_safe]
         return valid, lag_safe.astype(FDTYPE), inv_factorial
 
     @cached_property
     def _eye_n(self) -> FloatArray:
         """Cached ``np.eye(n)`` for the Kronecker product."""
-        return np.eye(self.n)
+        return np.eye(self.n, dtype=FDTYPE)
 
     @property
     def A(self) -> FloatArray:
@@ -141,7 +146,8 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         For an integrator chain, the inverse has a clean closed form
         and does not require a matrix inversion.
         """
-        return self.matrix(-np.asarray(dt, dtype=FDTYPE))
+        dt_arr = np.asarray(dt)
+        return self.matrix(-dt_arr)
 
     def transform(self, x: State, dt: FloatArray) -> State:
         """Push a state forward by ``dt`` under the discrete-time dynamics.

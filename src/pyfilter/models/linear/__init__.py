@@ -7,6 +7,7 @@ from ._base import (
     LinearTransitionBase,
     LTI_Transition,
 )
+from ._measurement import GaussianSelectionTransform, SelectionTransform
 from ._transitions import IntegratorChainTransition
 
 __all__ = [
@@ -18,4 +19,6 @@ __all__ = [
     "IntegratorChainTransition",
     "GenericLinearTransform",
     "LTI_Transition",
+    "SelectionTransform",
+    "GaussianSelectionTransform",
 ]

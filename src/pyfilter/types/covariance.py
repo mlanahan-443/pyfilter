@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from numbers import Number
 from typing import Any, Self, overload
 
 import numpy as np
 from scipy.linalg import cho_factor, cho_solve
 
-from ..config import CHOLESKY_CHECK_FINITE_, MONITOR_PERFORMANCE_
+from ..config import CHOLESKY_CHECK_FINITE_
 from ..hints import ArrayIndex, FloatArray, IndexItem
-from ..performance_util import performance_monitor
 from ..util import (
     _IndexerMethod,
     implements_ufunc,
@@ -179,6 +178,14 @@ class CovarianceBase(ABC):
         """
         result: FloatArray = np.sum(self.variance, axis=-1)
         return result
+
+    @classmethod
+    @abstractmethod
+    def concatenate(
+        cls, other: Iterable[CovarianceBase], axis: int | tuple[int, ...] = 0
+    ) -> CovarianceBase:
+        """Method for concatenation."""
+        ...
 
     @property
     def at(self) -> _IndexerMethod[Self]:
@@ -510,11 +517,6 @@ class CholeskyFactorCovariance(CovarianceBase):
         R = qr_result if isinstance(qr_result, np.ndarray) else qr_result[0]
         return CholeskyFactorCovariance(R.swapaxes(-2, -1))
 
-    @performance_monitor(
-        warn_threshold=2,
-        enable_warnings=MONITOR_PERFORMANCE_,
-        monitor=MONITOR_PERFORMANCE_,
-    )
     def full(self) -> FloatArray:
         """The full matrix representation
 
@@ -526,11 +528,6 @@ class CholeskyFactorCovariance(CovarianceBase):
         result: FloatArray = np.einsum("...ik,...jk->...ij", self._L, self._L)
         return result
 
-    @performance_monitor(
-        warn_threshold=2,
-        enable_warnings=MONITOR_PERFORMANCE_,
-        monitor=MONITOR_PERFORMANCE_,
-    )
     def _is_safe_matrix_slice(self, items: tuple[slice, ...]) -> bool:
         """
         Determines if a matrix index preserves the triangular structure of L.
@@ -583,8 +580,19 @@ class CholeskyFactorCovariance(CovarianceBase):
         )
 
     def inverse(self) -> FloatArray:
-        identity = np.broadcast_to(np.eye(*self.matrix_shape), self.shape)
+        identity = np.broadcast_to(
+            np.eye(*self.matrix_shape, dtype=self._L.dtype), self.shape
+        )
         return solve_cholesky_covariance(self, identity)
+
+    @classmethod
+    def concatenate(
+        cls, other: Iterable[CholeskyFactorCovariance], axis: int | tuple[int, ...] = 0
+    ) -> CholeskyFactorCovariance:
+        """Method for concatenation."""
+
+        L = np.concatenate([cov.cholesky_factor for cov in other], axis=axis)
+        return cls(L)
 
 
 class DiagonalCovariance(CovarianceBase):
@@ -632,11 +640,6 @@ class DiagonalCovariance(CovarianceBase):
         """Return unique identifier for current state of self._D"""
         return (id(self._D), hash(self._D.tobytes()))
 
-    @performance_monitor(
-        warn_threshold=2,
-        enable_warnings=MONITOR_PERFORMANCE_,
-        monitor=MONITOR_PERFORMANCE_,
-    )
     def full(self) -> FloatArray:
         """The full matrix representation.
 
@@ -644,7 +647,7 @@ class DiagonalCovariance(CovarianceBase):
             FloatArray: The full matrix.
         """
 
-        out = np.zeros(self.shape)
+        out = np.zeros(self.shape, dtype=self._D.dtype)
         out[..., *self.diagonal_indices] = self.variance
         return out
 
@@ -655,7 +658,7 @@ class DiagonalCovariance(CovarianceBase):
         Returns:
             FloatArray: The cholesky factor.
         """
-        out = np.zeros(self.shape)
+        out = np.zeros(self.shape, dtype=self._D.dtype)
         out[..., *self.diagonal_indices] = self._D
         return out
 
@@ -909,8 +912,19 @@ class DiagonalCovariance(CovarianceBase):
         )
 
     def inverse(self) -> FloatArray:
-        identity = np.broadcast_to(np.eye(*self.matrix_shape), self.shape)
+        identity = np.broadcast_to(
+            np.eye(*self.matrix_shape, dtype=self._D.dtype), self.shape
+        )
         return solve_diagonal_covariance(self, identity)
+
+    @classmethod
+    def concatenate(
+        cls, other: Iterable[DiagonalCovariance], axis: int | tuple[int, ...] = 0
+    ) -> DiagonalCovariance:
+        """Method for concatenation."""
+
+        D = np.concatenate([cov._D for cov in other], axis=axis)
+        return cls(D)
 
 
 def solve_cholesky_covariance(

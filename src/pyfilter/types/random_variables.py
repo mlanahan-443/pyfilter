@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Self, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints import ArrayIndex, FloatArray
 from pyfilter.linear_solve import solve_symmetric_cholesky
 from pyfilter.types.covariance import (
@@ -271,7 +270,7 @@ class GaussianRV[Covariance: CovarianceType]:
         For scalar a: Y = aX -> mean_Y = a*mean_X, cov_Y = a²*cov_X
         For matrix A: Y = AX -> mean_Y = A*mean_X, cov_Y = A*cov_X*A^T
         """
-        other = np.asarray(other, dtype=FDTYPE)
+        other = np.asarray(other, dtype=self.mean.dtype)
 
         if other.ndim == 0:  # scalar
             return GaussianRV(self.mean * other, self.covariance * (other**2))  # type: ignore[operator]
@@ -395,7 +394,7 @@ class GaussianRV[Covariance: CovarianceType]:
         if given_value is None:
             x2 = other.mean
         else:
-            x2 = np.asarray(given_value, dtype=FDTYPE)
+            x2 = np.asarray(given_value, dtype=other.mean.dtype)
 
         residual = x2 - other.mean
         sigma22_inv_residual = solve_symmetric_cholesky(
@@ -440,7 +439,7 @@ class GaussianRV[Covariance: CovarianceType]:
             GaussianRV: The conditional distribution X1|X2=given_value
         """
         # Validate inputs
-        cross_covariance = np.asarray(cross_covariance, dtype=FDTYPE)
+        cross_covariance = np.asarray(cross_covariance, dtype=self.mean.dtype)
 
         # Check dimensions
         n1 = len(self)
@@ -456,7 +455,7 @@ class GaussianRV[Covariance: CovarianceType]:
         if given_value is None:
             x2 = other.mean
         else:
-            x2 = np.asarray(given_value, dtype=FDTYPE)
+            x2 = np.asarray(given_value, dtype=other.mean.dtype)
 
         residual = x2 - other.mean
 
@@ -512,7 +511,7 @@ class GaussianRV[Covariance: CovarianceType]:
                 f"covariance_type:{covariance_type} not an allowable type. Allowable types are\n:{COV_SYMN_}"
             )
 
-        cross_covariance = np.asarray(cross_covariance, dtype=FDTYPE)
+        cross_covariance = np.asarray(cross_covariance, dtype=self.mean.dtype)
 
         # Validate dimensions
         n1 = len(self)
@@ -554,7 +553,7 @@ class GaussianRV[Covariance: CovarianceType]:
         # Build joint covariance matrix
         # [[Σ11, Σ12],
         #  [Σ21, Σ22]]
-        joint_cov = np.zeros(batch_shape + (n1 + n2, n1 + n2), dtype=FDTYPE)
+        joint_cov = np.zeros(batch_shape + (n1 + n2, n1 + n2), dtype=self.mean.dtype)
         joint_cov[..., :n1, :n1] = self_cov_bc
         joint_cov[..., n1:, n1:] = other_cov_bc
         joint_cov[..., :n1, n1:] = cross_cov_bc
@@ -580,7 +579,7 @@ class GaussianRV[Covariance: CovarianceType]:
         Returns:
             NDArray: Cross-covariance Cov(X, Y) = Σ_X @ A^T with shape (..., n, m)
         """
-        A = np.asarray(A, dtype=FDTYPE)
+        A = np.asarray(A, dtype=self.mean.dtype)
 
         # Check dimensions
         n = len(self)
@@ -598,3 +597,21 @@ class GaussianRV[Covariance: CovarianceType]:
     def zero_mean(cls, covariance: CovarianceType) -> Self:
         """Zero mean gaussian random variable."""
         return cls(np.zeros(covariance.shape[:-1]), covariance)
+
+    @classmethod
+    def concatenate[CovarianceT: CovarianceBase](
+        cls,
+        variables: Iterable[GaussianRV[CovarianceT]],
+        axis: int | tuple[int, ...] = 0,
+    ) -> GaussianRV[CovarianceT]:
+        if len(variables) == 0:
+            raise ValueError("Variables to concatenate must not be empty.")
+        mean = np.concatenate([rv.mean for rv in variables], axis=axis)
+        if isinstance(variables[0].covariance, np.ndarray):
+            covariance = np.concatenate([rv.covariance for rv in variables], axis=axis)
+        else:
+            covariance = type(variables[0].covariance).concatenate(
+                [rv.covariance for rv in variables], axis=axis
+            )
+
+        return GaussianRV(mean, covariance)
