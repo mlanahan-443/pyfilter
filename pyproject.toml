@@ -14,7 +14,8 @@ authors = [
 dependencies = [
     "numpy>=1.20.0",
     "pandas>=2.3.3",
-    "scipy>=1.17.0"
+    "scipy>=1.17.0",
+    "jax>=0.10.0"
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,7 @@ dev = [
     "pandas-stubs",
     "ipykernel>=7.2.0",
     "matplotlib",
+
 ]
 
 [tool.setuptools.packages.find]

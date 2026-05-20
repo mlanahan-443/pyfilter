@@ -16,6 +16,7 @@ src/pyfilter/models/__init__.py
 src/pyfilter/models/_discretization.py
 src/pyfilter/models/linear/__init__.py
 src/pyfilter/models/linear/_base.py
+src/pyfilter/models/linear/_measurement.py
 src/pyfilter/models/linear/_transitions.py
 src/pyfilter/types/__init__.py
 src/pyfilter/types/covariance.py
