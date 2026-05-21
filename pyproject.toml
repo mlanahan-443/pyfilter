@@ -28,7 +28,8 @@ dev = [
     "pandas-stubs",
     "ipykernel>=7.2.0",
     "matplotlib",
-
+    "rich",
+    "numba",
 ]
 
 [tool.setuptools.packages.find]

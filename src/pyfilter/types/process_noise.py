@@ -7,7 +7,7 @@ import scipy
 from numpy.typing import DTypeLike
 
 from pyfilter.config import FDTYPE_ as FDTYPE
-from pyfilter.types import Covariance, CovarianceBase, GaussianRV
+from pyfilter.types import CovarianceBase, GaussianRV
 
 from ..hints import FloatArray
 
@@ -134,7 +134,7 @@ class WeinerProcessNoise(ProcessNoise):
     def _intensity_matrix(self) -> FloatArray:
         return _full_intensity_matrix(self.intensity, self.n, dtype=self.dtype)
 
-    def covariance(self, dt: FloatArray) -> Covariance:
+    def covariance(self, dt: FloatArray) -> FloatArray:
         """Discrete process noise covariance $Q_d(\\Delta t)$.
 
         Args:

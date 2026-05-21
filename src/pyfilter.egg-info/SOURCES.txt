@@ -1,5 +1,7 @@
 pyproject.toml
 setup.py
+src/gutil/__init__.py
+src/gutil/_profile.py
 src/pyfilter/__init__.py
 src/pyfilter/config.py
 src/pyfilter/hints.py
