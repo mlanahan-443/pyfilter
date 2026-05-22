@@ -1,3 +1,20 @@
+"""This compares the runtimes of a simple relatively naive implementation of a linear gaussian kalman filter
+using:
+
+1. Numpy, with python recursive loop.
+2. Numpy, with numba compiled recursion.
+3. Jax, with jax.lax.scan.
+
+The results are for CPU: 8 core AMD Ryzen 7 8840HS w/ Radeon 780M Graphics machine. We force single threading due to problem size.
+
+The results demonstrate that either numba or Jax acceleration yield a significant speedup
+- n = 100 measurements: ~5.1x
+- n = 1000 measurement: ~ 5.5x
+- n = 10000 measurement: ~5.9x
+
+The numba kernel produces less jitter than the jax kernel.
+"""
+
 import numba
 import numpy as np
 import rich
@@ -7,27 +24,31 @@ from numpy.typing import NDArray
 from pyfilter.gutil import LineProfiler
 from pyfilter.models.linear import GaussianSelectionTransform, IntegratorChainTransition
 from pyfilter.types.process_noise import WeinerProcessNoise
+import jax
+jax.config.update("jax_enable_x64", True)
 
+from jax import numpy as jnp
+import time
 
-def linear_kalman_update[T:NDArray[np.floating]](x: T,P: T,z: T,H: T,R: T, I: T) -> tuple[T,T]:
-
-    HP = H @ P
-    S = HP @ H.mT + R
-    gain = np.linalg.solve(S,HP).mT
-    residual = z - H @ x
-    x_update = x + gain @ residual
-    I_minus_WH = I - gain @ H
-    P_update = I_minus_WH @ P @ I_minus_WH.mT + gain @ R @ gain.mT
-    return x_update,P_update
-
-
-def linear_kalman_prediction[T: NDArray[np.floating]](x: T,P:T,F: T,Q: T) -> tuple[T,T]:
-
+def numpy_kalman_step(
+    x: np.ndarray, P: np.ndarray, z: np.ndarray,
+    F: np.ndarray, H: np.ndarray, R: np.ndarray, Q: np.ndarray,
+    eye: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    # Predict
     x_pred = F @ x
-    P_pred =  F@ P @ F.mT + Q
-    return x_pred,P_pred
+    P_pred = F @ P @ F.T + Q
+    # Update (Joseph form)
+    HP = H @ P_pred
+    S = HP @ H.T + R
+    gain = np.linalg.solve(S, HP).T
+    residual = z - H @ x_pred
+    x_new = x_pred + gain @ residual
+    A = eye - gain @ H
+    P_new = A @ P_pred @ A.T + gain @ R @ gain.T
+    return x_new, P_new
 
-def run_numpy[Arr: NDArray[np.floating]](
+def numpy_filter[Arr: NDArray[np.floating]](
         x0: Arr,
         P0: Arr,
         z: Arr,
@@ -37,19 +58,17 @@ def run_numpy[Arr: NDArray[np.floating]](
         Q: Arr,
 ) -> tuple[Arr,Arr]:
 
-    x = x0.copy()
-    P = P0.copy()
     eye = np.eye(x0.shape[-1])
-    x_out = []
-    P_out = []
+    x_out = np.empty((z.shape[0] + 1,x0.shape[-1]), dtype=x0.dtype)
+    P_out = np.empty((z.shape[0] + 1, *P0.shape[-2:]), dtype=P0.dtype)
+    x_out[0] = x0
+    P_out[0] = P0
     for i in range(z.shape[0]):
-        x_pred,P_pred = linear_kalman_prediction(x,P,F,Q)
-        x,P= linear_kalman_update(x_pred, P_pred,z[i],H,R,eye)
-        x_out.append(x.copy())
-        P_out.append(P.copy())
+        x_out[i+1,:],P_out[i+1,:]= numpy_kalman_step(
+            x_out[i,:], P_out[i,:],z[i],F,H,R,Q,eye
+        )
 
-    return np.concatenate(x_out,axis = 0),np.concatenate(P_out,axis = 0)
-
+    return x_out,P_out
 
 @numba.njit(cache=True, fastmath=False, boundscheck=False,nopython = True)
 def numbda_kalman_step(
@@ -71,23 +90,46 @@ def numbda_kalman_step(
     return x_new, P_new
 
 
-@numba.njit(cache=True, fastmath=False, boundscheck=False,nopython = True)
+@numba.njit(cache=True, fastmath=False, boundscheck=False)
 def numbda_filter(
     x0: np.ndarray, P0: np.ndarray, z: np.ndarray,
     F: np.ndarray, H: np.ndarray, R: np.ndarray, Q: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    T = z.shape[0]
-    n = x0.shape[0]
-    eye = np.eye(n)
-    x = x0.copy()
-    P = P0.copy()
-    x_out = np.empty((T, n), dtype=x0.dtype)
-    P_out = np.empty((T, n, n), dtype=P0.dtype)
-    for i in range(T):
-        x, P = numbda_kalman_step(x, P, z[i], F, H, R, Q, eye)
-        x_out[i] = x
-        P_out[i] = P
-    return x_out, P_out
+    eye = np.eye(x0.shape[-1])
+    x_out = np.empty((z.shape[0] + 1,x0.shape[-1]), dtype=x0.dtype)
+    P_out = np.empty((z.shape[0] + 1, *P0.shape[-2:]), dtype=P0.dtype)
+    x_out[0] = x0
+    P_out[0] = P0
+    for i in range(z.shape[0]):
+        x_out[i+1,:],P_out[i+1,:]= numbda_kalman_step(
+            x_out[i,:], P_out[i,:],z[i],F,H,R,Q,eye
+        )
+
+    return x_out,P_out
+
+
+@jax.jit
+def jax_filter(
+    x0: jax.Array, P0: jax.Array, z: jax.Array,
+    F: jax.Array, H: jax.Array, R: jax.Array, Q: jax.Array,
+) -> tuple[jax.Array, jax.Array]:
+    eye = jnp.eye(x0.shape[-1], dtype=x0.dtype)
+
+    def step(state, z_k):
+        x, P = state
+        x_pred = F @ x
+        P_pred = F @ P @ F.mT + Q
+        HP = H @ P_pred
+        S = HP @ H.mT + R
+        gain = jnp.linalg.solve(S, HP).mT
+        residual = z_k - H @ x_pred
+        x_new = x_pred + gain @ residual
+        A = eye - gain @ H
+        P_new = A @ P_pred @ A.mT + gain @ R @ gain.mT
+        return (x_new, P_new), (x_new, P_new)
+
+    _, (xs, Ps) = jax.lax.scan(step, (x0, P0), z)
+    return jnp.concatenate([x0[jnp.newaxis,...],xs]), jnp.concatenate([P0[jnp.newaxis,...],Ps])
 
 def generate_data(
         x0: NDArray[np.floating],
@@ -104,12 +146,12 @@ def generate_data(
 
 def main():
 
-    x0 = np.array([1,-10,1,-0.15,0.03,1,0.001,0.01,-0.2],dtype = np.float32)
+    #Common Setup
+    x0 = np.array([1,-10,1,-0.15,0.03,1,0.001,0.01,-0.2],dtype = np.float64)
     F = IntegratorChainTransition(n = 3,p = 3).matrix(np.array(0.5))
     H = GaussianSelectionTransform(slice(0,3),9).matrix.copy()
     Q = WeinerProcessNoise(n = 3,p = 3,intensity= np.array(0.1)).covariance(np.array(0.5))
 
-    print(F.shape,H.shape,Q.shape)
     n = 100
     rng = default_rng(seed = 45)
     noise = rng.normal(scale = 0.1,size = (n+1,3)).astype(x0.dtype)
@@ -117,30 +159,77 @@ def main():
     R = np.eye(3)*0.1
     P0 = np.eye(9)*10
 
+    #NumPy
     numpy_profiler = LineProfiler("NumPy")
     numpy_profiler.timeit(
-        lambda: run_numpy(
+        lambda: numpy_filter(
         x0,P0,z,F,H,R,Q
         ),
-        number = 5,
-        repeat = 3
+        number = 100,
+        repeat = 5
     )
 
     rich.print(numpy_profiler)
+    
+    #Jax 
+    #Convert to jax arrays.
+    args = tuple(jnp.asarray(a) for a in [x0, P0, z, F, H, R, Q])
 
-    numbda_filter(x0.astype(np.float64),P0.astype(np.float64), z.astype(np.float64), F.astype(np.float64), H.astype(np.float64), R.astype(np.float64), Q.astype(np.float64))
+    #Check compile time.
+    start = time.time()
+    jax_filter(
+            *args
+    )
+    end = time.time()
+    print(f"Jax Compile Time: {round((end - start)*1e3)} ms")
 
+    #Profile
+    jax_profiler = LineProfiler("Jax")
+    jax_profiler.timeit(
+        lambda: jax.block_until_ready(jax_filter(
+            *args
+        )),
+        number = 100,
+        repeat = 5
+    )
+    rich.print(jax_profiler)
+    
+    #Numba
+    #Numba is picky about datatypes
+    args = tuple(arr.astype(np.float64) for arr in [x0,P0,z,F,H,R,Q])
+    
+    #Check compile time
+    start = time.time()
+    numbda_filter(*args)
+    end = time.time()
+    print(f"Numba Compile Time: {round((end - start)*1e3)} ms")
+    
+    #Profile.
     numba_profiler = LineProfiler("Numba")
     numba_profiler.timeit(
-        lambda: numbda_filter(x0.astype(np.float64),P0.astype(np.float64), z.astype(np.float64), F.astype(np.float64), H.astype(np.float64), R.astype(np.float64), Q.astype(np.float64)),
-        number =5,
-        repeat= 3
+        lambda: numbda_filter(*args),
+        number =100,
+        repeat= 5
     )
 
     rich.print(numba_profiler)
 
+    #Check correctness against NumPy reference.
+    x_np, P_np = numpy_filter(
+        x0,P0,z,F,H,R,Q
+    )
 
+    x_jax,P_jax = (np.array(x) for x in jax_filter(
+        *tuple(jnp.asarray(a) for a in [x0, P0, z, F, H, R, Q])
+    ))
 
+    x_numba,P_numba = numbda_filter(
+        *tuple(arr.astype(np.float64) for arr in [x0,P0,z,F,H,R,Q])
+    )
+
+    for name, arrs in zip(("Jax","Numba"),((x_jax,P_jax),(x_numba,P_numba))):
+        np.testing.assert_almost_equal(arrs[0], x_np,err_msg= f"Mean estimate differs for {name} filter")
+        np.testing.assert_almost_equal(arrs[1], P_np,err_msg= f"Covariance estimate differs for {name} filter")
 
 if __name__ == "__main__":
     main()
