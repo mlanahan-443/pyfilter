@@ -1,10 +1,11 @@
 from typing import override
 
-import numpy as np
-from numpy.typing import ArrayLike, DTypeLike
+import jax
+from jax import numpy as jnp
+from jax.typing import ArrayLike, DTypeLike
 
 from pyfilter.config import FDTYPE_ as FDYTPE
-from pyfilter.hints import FloatArray, IntArr
+from pyfilter.hints.jax_hints import JaxFloatArray, JaxIntArray
 from pyfilter.types import Covariance, GaussianRV, RandomVariable
 
 from ._base import LinearTransformBase
@@ -20,7 +21,7 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     """
 
     def __init__(
-        self, indices: IntArr | slice, input_dim: int, dtype: DTypeLike = FDYTPE
+        self, indices: JaxIntArray | slice, input_dim: int, dtype: DTypeLike = FDYTPE
     ) -> None:
         super().__init__(dtype=dtype)
         if input_dim <= 0:
@@ -29,15 +30,15 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
         self._input_dim = input_dim
 
     @property
-    def indices(self) -> IntArr:
+    def indices(self) -> JaxIntArray:
         if isinstance(self._index_or_slice, slice):
-            return np.arange(
+            return jnp.arange(
                 self._index_or_slice.start,
                 self._index_or_slice.stop,
                 self._index_or_slice.step,
             )
 
-        return np.asarray(self._index_or_slice).astype(np.int32)
+        return jnp.asarray(self._index_or_slice).astype(jnp.int32)
 
     @property
     def input_dim(self) -> int:
@@ -49,10 +50,9 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
 
     @property
     @override
-    def matrix(self) -> FloatArray:
-        M = np.zeros((self.output_dim, self._input_dim), dtype=self.dtype)
-        M[np.arange(self.output_dim), self.indices] = 1.0
-        return M
+    def matrix(self) -> JaxFloatArray:
+        """Form the selection matrix explicitly."""
+        return jax.nn.one_hot(self.indices,self ._input_dim, dtype = self.dtype)
 
     @override
     def transform(self, x: State) -> State:

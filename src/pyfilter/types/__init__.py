@@ -1,11 +1,11 @@
 from typing import Any
 
-from ..hints import FloatArray
+from ..hints import JaxFloatArray
 from .covariance import CovarianceBase
 from .random_variables import GaussianRV
 
-type RandomVariable = GaussianRV[Any] | FloatArray
-type Covariance = CovarianceBase | FloatArray
+type RandomVariable = GaussianRV[Any] | JaxFloatArray
+type Covariance = CovarianceBase | JaxFloatArray
 
 __all__ = [
     "CovarianceBase",

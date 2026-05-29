@@ -64,8 +64,8 @@ The library uses a sophisticated type hierarchy for representing probability dis
   - Both support array indexing, slicing, and NumPy broadcasting
 
 - **Type Aliases** (defined in [src/pyfilter/types/\_\_init\_\_.py](src/pyfilter/types/__init__.py)):
-  - `RandomVariable = GaussianRV[Any] | FloatArray`
-  - `Covariance = CovarianceBase | FloatArray`
+  - `RandomVariable = GaussianRV[Any] | JaxFloatArray`
+  - `Covariance = CovarianceBase | JaxFloatArray`
 
 ### Linear Models Architecture
 
@@ -109,8 +109,8 @@ Global settings in [src/pyfilter/config.py](src/pyfilter/config.py):
 
 The codebase uses Python 3.12+ type syntax:
 - Type parameters: `class Foo[T]: ...`
-- Type aliases: `type Variable = GaussianRV[Any] | FloatArray`
-- Import type hints from [src/pyfilter/hints.py](src/pyfilter/hints.py): `FloatArray`, `ArrayIndex`, `IntArr`, `BoolArr` , `VoidArr`.
+- Type aliases: `type Variable = GaussianRV[Any] | JaxFloatArray`
+- Import type hints from [src/pyfilter/hints.py](src/pyfilter/hints.py): `JaxFloatArray`, `ArrayIndex`, `JaxIntArr`, `BoolArr` , `VoidArr`.
 
 ## MyPy Configuration
 

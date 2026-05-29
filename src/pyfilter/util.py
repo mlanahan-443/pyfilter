@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from types import EllipsisType
 from typing import Any
 
-import numpy as np
-from numpy.typing import ArrayLike
+from jax import numpy as jnp
+from jax.typing import ArrayLike
 
-from pyfilter.hints import ArrayIndex
+from pyfilter.hints.jax_hints import ArrayIndex
 
 # Define a full slice object
 full_slice = slice(None, None, None)  # Represents the ':'
@@ -37,7 +37,7 @@ def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
         raise IndexError("an index can only have a single Ellipsis (...)")
 
     # 2. Count the Non-Ellipsis items that consume a dimension
-    # (Excludes Ellipsis and np.newaxis/None)
+    # (Excludes Ellipsis and jnp.newaxis/None)
 
     # Count of components that *consume* an existing dimension
     n_explicit_consumers = sum(
@@ -66,7 +66,7 @@ def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
     return tuple(normalized)
 
 
-def left_broadcast_arrays(*args: ArrayLike) -> list[np.ndarray[Any, Any]]:
+def left_broadcast_arrays(*args: ArrayLike) -> list[ArrayLike]:
     """
     Broadcasts any number of arrays against each other using left-aligned logic
     (batch dimensions first), rather than NumPy's standard right-aligned logic.
@@ -80,7 +80,7 @@ def left_broadcast_arrays(*args: ArrayLike) -> list[np.ndarray[Any, Any]]:
     Raises:
         ValueError: If the arrays cannot be broadcast even after left-alignment.
     """
-    arrays = [np.asanyarray(x) for x in args]
+    arrays = [jnp.asarray(x) for x in args]
 
     if not arrays:
         return []
@@ -104,7 +104,7 @@ def left_broadcast_arrays(*args: ArrayLike) -> list[np.ndarray[Any, Any]]:
             aligned_arrays.append(arr)
 
     # Use standard numpy broadcasting on the now-aligned arrays
-    return list(np.broadcast_arrays(*aligned_arrays))
+    return list(jnp.broadcast_arrays(*aligned_arrays))
 
 
 type IndexingFunction[T] = Callable[[ArrayIndex], T]

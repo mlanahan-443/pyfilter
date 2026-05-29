@@ -1,5 +1,5 @@
-import numpy as np
-from scipy.linalg import cholesky
+from jax import numpy as jnp
+from jax.scipy.linalg import cholesky
 
 from pyfilter.linear_solve import (
     solve_cholesky_covariance,
@@ -16,23 +16,23 @@ def test_solve_symmetric_cholesky_dense_array():
     """Test that the cholesky solver returns the correct result.
 
     Construct a PSD matrix, and test that this is the same result
-    as returned using the LU decomposition in np.linalg.solve."""
+    as returned using the LU decomposition in jnp.linalg.solve."""
     batch_shape = (100, 10)
     mat_shape = 40
-    A_ = np.random.random(size=batch_shape + (mat_shape, mat_shape))
+    A_ = jnp.random.random(size=batch_shape + (mat_shape, mat_shape))
     A = A_ + A_.transpose((0, 1, 3, 2))
 
     # Force PSD-ness.
-    A[:, :, np.diag_indices(mat_shape)] += (
-        10 * np.eye(mat_shape)[np.newaxis, np.newaxis, ...]
+    A[:, :, jnp.diag_indices(mat_shape)] += (
+        10 * jnp.eye(mat_shape)[np.newaxis, jnp.newaxis, ...]
     )
-    b = np.random.random(batch_shape + (mat_shape, mat_shape))
+    b = jnp.random.random(batch_shape + (mat_shape, mat_shape))
 
-    x_compare = np.linalg.solve(A, b)
+    x_compare = jnp.linalg.solve(A, b)
 
     x_cholesky = solve_symmetric_cholesky_dense_array(A, b)
 
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using symmetric solver differs from LU decomposition solve",
@@ -44,26 +44,26 @@ def test_solve_cholesky_covariance():
 
     Construct a PSD matrix, convert to a cholesky covariance object,
     test that what is returned using the LU decomposition in
-    np.linalg.solve is the same."""
+    jnp.linalg.solve is the same."""
     batch_shape = (100, 10)
     mat_shape = 40
-    A_ = np.random.random(size=batch_shape + (mat_shape, mat_shape))
+    A_ = jnp.random.random(size=batch_shape + (mat_shape, mat_shape))
     A = A_ + A_.transpose((0, 1, 3, 2))
     # Force PSD-ness.
-    A[:, :, np.diag_indices(mat_shape)] += (
-        10 * np.eye(mat_shape)[np.newaxis, np.newaxis, ...]
+    A[:, :, jnp.diag_indices(mat_shape)] += (
+        10 * jnp.eye(mat_shape)[np.newaxis, jnp.newaxis, ...]
     )
     L = cholesky(A, lower=True)
 
-    b = np.random.random(batch_shape + (mat_shape, mat_shape))
+    b = jnp.random.random(batch_shape + (mat_shape, mat_shape))
 
-    x_compare = np.linalg.solve(A, b)
+    x_compare = jnp.linalg.solve(A, b)
 
     cov = CholeskyFactorCovariance(L)
 
     x_cholesky = solve_cholesky_covariance(cov, b)
 
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using cholesky factor covariance differs from LU decomposition solve.",
@@ -77,16 +77,16 @@ def test_solve_diagonal_covariance():
     test that what is returned using the solver vs. division is the same."""
     batch_shape = (100, 10)
     mat_shape = 40
-    d = np.random.random(size=batch_shape + (mat_shape,))
+    d = jnp.random.random(size=batch_shape + (mat_shape,))
 
-    b = np.random.random(batch_shape + (mat_shape, mat_shape))
+    b = jnp.random.random(batch_shape + (mat_shape, mat_shape))
 
-    x_compare = b / d[..., np.newaxis]
+    x_compare = b / d[..., jnp.newaxis]
 
     cov = DiagonalCovariance(d**0.5)
 
     x_cholesky = solve_diagonal_covariance(cov, b)
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using cholesky factor covariance differs from division.",
@@ -97,20 +97,20 @@ def test_solve_symmetric_cholesky():
     """Test that the solver dispatcher returns the intended result."""
     batch_shape = (100, 10)
     mat_shape = 40
-    A_ = np.random.random(size=batch_shape + (mat_shape, mat_shape))
+    A_ = jnp.random.random(size=batch_shape + (mat_shape, mat_shape))
     A = A_ + A_.transpose((0, 1, 3, 2))
 
     # Force PSD-ness.
-    A[:, :, np.diag_indices(mat_shape)] += (
-        10 * np.eye(mat_shape)[np.newaxis, np.newaxis, ...]
+    A[:, :, jnp.diag_indices(mat_shape)] += (
+        10 * jnp.eye(mat_shape)[np.newaxis, jnp.newaxis, ...]
     )
-    b = np.random.random(batch_shape + (mat_shape, mat_shape))
+    b = jnp.random.random(batch_shape + (mat_shape, mat_shape))
 
-    x_compare = np.linalg.solve(A, b)
+    x_compare = jnp.linalg.solve(A, b)
 
     x_cholesky = solve_symmetric_cholesky(A, b)
 
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using symmetric cholesky solver dispatcher with dense array differs from LU decomposition solve",
@@ -120,7 +120,7 @@ def test_solve_symmetric_cholesky():
     cov = CholeskyFactorCovariance(L)
     x_cholesky = solve_symmetric_cholesky(cov, b)
 
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using symmetric cholesky solver with CholeskyFactorCovariance differs from LU decomposition solve.",
@@ -128,16 +128,16 @@ def test_solve_symmetric_cholesky():
 
     batch_shape = (100, 10)
     mat_shape = 40
-    d = np.random.random(size=batch_shape + (mat_shape,))
+    d = jnp.random.random(size=batch_shape + (mat_shape,))
 
-    b = np.random.random(batch_shape + (mat_shape, mat_shape))
+    b = jnp.random.random(batch_shape + (mat_shape, mat_shape))
 
-    x_compare = b / d[..., np.newaxis]
+    x_compare = b / d[..., jnp.newaxis]
 
     cov = DiagonalCovariance(d**0.5)
 
     x_cholesky = solve_symmetric_cholesky(cov, b)
-    np.testing.assert_allclose(
+    jnp.testing.assert_allclose(
         x_compare,
         x_cholesky,
         err_msg="X using symmetric cholesky solver with DiagonalCovariance differs from division.",

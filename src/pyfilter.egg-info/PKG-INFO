@@ -7,15 +7,17 @@ Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: numpy>=1.20.0
 Requires-Dist: pandas>=2.3.3
-Requires-Dist: scipy>=1.17.0
+Requires-Dist: jax.scipy>=1.17.0
 Requires-Dist: jax>=0.10.0
 Provides-Extra: dev
 Requires-Dist: pytest>=6.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: mypy; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
-Requires-Dist: scipy-stubs; extra == "dev"
+Requires-Dist: jax.scipy-stubs; extra == "dev"
 Requires-Dist: pandas-stubs; extra == "dev"
 Requires-Dist: ipykernel>=7.2.0; extra == "dev"
 Requires-Dist: matplotlib; extra == "dev"
 Requires-Dist: rich; extra == "dev"
+Requires-Dist: numba; extra == "dev"
+Requires-Dist: jaxtyping; extra == "dev"

@@ -2,11 +2,12 @@
 from dataclasses import dataclass
 from functools import cached_property
 
-import numpy as np
-import scipy.special
+import jax
+import jax.scipy.special
+from jax import numpy as jnp
 
 from pyfilter.config import FDTYPE_ as FDTYPE
-from pyfilter.hints import BoolArray, FloatArray
+from pyfilter.hints.jax_hints import JaxBoolArray, JaxFloatArray
 from pyfilter.types import RandomVariable
 
 from ._base import LinearTransitionBase
@@ -76,7 +77,7 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         return self.n * self.p
 
     @cached_property
-    def _temporal_factors(self) -> tuple[BoolArray, FloatArray, FloatArray]:
+    def _temporal_factors(self) -> tuple[JaxBoolArray, JaxFloatArray, JaxFloatArray]:
         """Precompute index structure of the temporal matrix T.
 
         Returns:
@@ -86,39 +87,26 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
             inv_factorial: ``(p, p)`` array of $1 / (j - i)!$ values
                 (also masked-safe).
         """
-        i_idx, j_idx = np.indices((self.p, self.p))
+        i_idx, j_idx = jnp.indices([self.p, self.p])
         lag = j_idx - i_idx  # (p, p), in [-(p-1), p-1]
         valid = lag >= 0
-        lag_safe = np.where(valid, lag, 0)
+        lag_safe = jnp.where(valid, lag, 0)
 
-        factorials = scipy.special.factorial(np.arange(self.p)).astype(lag_safe.dtype)
+        factorials = jax.scipy.special.factorial(jnp.arange(self.p)).astype(lag_safe.dtype)
         inv_factorial = 1.0 / factorials[lag_safe]
         return valid, lag_safe.astype(FDTYPE), inv_factorial
 
     @cached_property
-    def _eye_n(self) -> FloatArray:
+    def _eye_n(self) -> JaxFloatArray:
         """Cached ``np.eye(n)`` for the Kronecker product."""
-        return np.eye(self.n, dtype=FDTYPE)
+        return jnp.eye(self.n, dtype=FDTYPE)
 
     @property
-    def A(self) -> FloatArray:
-        """Continuous-time generator matrix.
+    def A(self) -> JaxFloatArray:
+        """Just identity matrix."""
+        return jnp.eye(self.state_dim, k=self.n, dtype=self.dtype)
 
-        Block-bidiagonal with $I_n$ on the first block super-diagonal:
-        $A_{ij} = I_n$ if $j = i + 1$, else $0$ (in block form).
-        """
-        d = self.state_dim
-        A = np.zeros((d, d))
-        if self.p > 1:
-            # Place I_n on each block super-diagonal position (i, i+1).
-            block_diag = np.einsum("i,ab->iab", np.ones(self.p - 1), self._eye_n)
-            for i in range(self.p - 1):
-                A[
-                    i * self.n : (i + 1) * self.n, (i + 1) * self.n : (i + 2) * self.n
-                ] = block_diag[i]
-        return A
-
-    def matrix(self, dt: FloatArray) -> FloatArray:
+    def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete-time transition matrix $\\Phi(\\Delta t)$.
 
         Args:
@@ -127,29 +115,29 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         Returns:
             Array of shape ``(*dt.shape, state_dim, state_dim)``.
         """
-        dt_arr = np.asarray(dt, dtype=FDTYPE)
+        dt_arr = jnp.asarray(dt, dtype=FDTYPE)
         valid, exponent, inv_factorial = self._temporal_factors
 
         # Temporal matrix: T[..., i, j] = dt^(j-i) / (j-i)! for j >= i.
         # Broadcast dt over the (p, p) grid.
-        dt_b = dt_arr[..., np.newaxis, np.newaxis]
-        T = np.where(valid, dt_b**exponent * inv_factorial, 0.0)  # (*batch, p, p)
+        dt_b = dt_arr[..., jnp.newaxis, jnp.newaxis]
+        T = jnp.where(valid, dt_b**exponent * inv_factorial, 0.0)  # (*batch, p, p)
 
         # Kronecker with I_n via einsum: Phi[..., i*n+a, j*n+b] = T[..., i, j] * I[a, b].
-        Phi = np.einsum("...ij,ab->...iajb", T, self._eye_n)
+        Phi = jnp.einsum("...ij,ab->...iajb", T, self._eye_n)
 
         return Phi.reshape(*dt_arr.shape, self.state_dim, self.state_dim)
 
-    def inverse(self, dt: FloatArray) -> FloatArray:
+    def inverse(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Inverse transition: $\\Phi(\\Delta t)^{-1} = \\Phi(-\\Delta t)$.
 
         For an integrator chain, the inverse has a clean closed form
         and does not require a matrix inversion.
         """
-        dt_arr = np.asarray(dt)
+        dt_arr = jnp.asarray(dt)
         return self.matrix(-dt_arr)
 
-    def transform(self, x: State, dt: FloatArray) -> State:
+    def transform(self, x: State, dt: JaxFloatArray) -> State:
         """Push a state forward by ``dt`` under the discrete-time dynamics.
 
         Args:

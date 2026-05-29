@@ -30,6 +30,7 @@ dev = [
     "matplotlib",
     "rich",
     "numba",
+    "jaxtyping",
 ]
 
 [tool.setuptools.packages.find]

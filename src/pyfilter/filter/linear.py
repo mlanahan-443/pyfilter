@@ -4,14 +4,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-import scipy
+import jax.scipy
+from jax import numpy as jnp
 
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types import Covariance, CovarianceBase
 from pyfilter.types.covariance import CholeskyFactorCovariance
 
-from ..hints import FloatArray
+from ..hints import JaxFloatArray
 from ..types.process_noise import ProcessNoise
 from ..types.random_variables import GaussianRV
 
@@ -30,7 +30,7 @@ class BaseLinearGaussianKalmanFilter[
     measurement_model: LinearTransformBase[GaussianRV[MeasurementCovariance]]
 
     def predict(
-        self, current_state: GaussianRV[StateCovariance], dt: FloatArray
+        self, current_state: GaussianRV[StateCovariance], dt: JaxFloatArray
     ) -> GaussianRV[StateCovariance]:
         """Predict the state forward."""
         xp = self.transition_model.transform(current_state, dt)
@@ -147,13 +147,13 @@ class SquareRootLinearGuassianKalman[
 
         # Pre-array (supports batching via leading dims)
         HL = self.measurement_model.matrix @ L_pred  # (..., m, n)
-        top = np.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
-        bottom = np.concatenate(
+        top = jnp.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
+        bottom = jnp.concatenate(
             [np.zeros((*L_pred.shape[:-2], n, m), dtype=L_pred.dtype), L_pred], axis=-1
         )  # (..., n, m+n)
-        A = np.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
+        A = jnp.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
-        B = np.linalg.qr(A.mT, mode="reduced").R  # upper-tri (..., m+n, m+n)
+        B = jnp.linalg.qr(A.mT, mode="reduced").R  # upper-tri (..., m+n, m+n)
 
         L_S_T = B[..., :m, :m]
         KLS_T = B[..., :m, m:]
@@ -162,10 +162,10 @@ class SquareRootLinearGuassianKalman[
         # K via triangular solve (cheap)
         # We have KLS = K @ L_S, so K = KLS @ L_S^(-1)
         # Solve L_S.T @ X.T = KLS.T for X, which gives X = KLS @ L_S^(-1)
-        K = scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
+        K = jax.scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
 
         # mean update
-        posterior_mean = state_prediction.mean + np.einsum(
+        posterior_mean = state_prediction.mean + jnp.einsum(
             "...ij,...j->...i", K, innovation.mean
         )
 

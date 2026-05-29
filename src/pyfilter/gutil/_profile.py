@@ -36,7 +36,6 @@ from typing import (
     Self,
 )
 
-import numpy as np
 from numpy.typing import NDArray
 from rich.box import SIMPLE_HEAD
 from rich.console import Console, RenderableType

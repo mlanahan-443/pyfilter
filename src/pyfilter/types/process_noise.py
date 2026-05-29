@@ -2,14 +2,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
-import numpy as np
-import scipy
-from numpy.typing import DTypeLike
+import jax
+from jax import numpy as jnp
+from jax.typing import DTypeLike
 
 from pyfilter.config import FDTYPE_ as FDTYPE
+from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types import CovarianceBase, GaussianRV
-
-from ..hints import FloatArray
 
 
 class ProcessNoise(ABC):
@@ -17,24 +16,24 @@ class ProcessNoise(ABC):
         self.shape = shape
 
     @abstractmethod
-    def covariance(self, dt: FloatArray) -> GaussianRV | CovarianceBase:
+    def covariance(self, dt: JaxFloatArray) -> GaussianRV | CovarianceBase:
         pass
 
-    def __call__(self, dt: FloatArray) -> CovarianceBase:
+    def __call__(self, dt: JaxFloatArray) -> CovarianceBase:
         return self.covariance(dt)
 
 
 def _full_intensity_matrix(
-    intensity: FloatArray, n: int, dtype: DTypeLike = FDTYPE
-) -> FloatArray:
+    intensity: JaxFloatArray, n: int, dtype: DTypeLike = FDTYPE
+) -> JaxFloatArray:
     """Normalize ``intensity`` to a full $(..., n, n)$ matrix."""
-    Q = np.asarray(intensity, dtype=dtype)
+    Q = jnp.asarray(intensity, dtype=dtype)
     if Q.ndim == 0:
-        return Q * np.eye(n, dtype=Q.dtype)
+        return Q * jnp.eye(n, dtype=Q.dtype)
     if Q.ndim == 1:
         if Q.shape[0] != n:
             raise ValueError(f"1-D intensity must have length {n}, got {Q.shape}")
-        return np.diag(Q)
+        return jnp.diag(Q)
     if Q.shape[-2:] != (n, n):
         raise ValueError(
             f"Intensity matrix must have trailing shape ({n}, {n}), got {Q.shape}"
@@ -67,8 +66,8 @@ class WeinerProcessNoise(ProcessNoise):
 
     Examples:
         # 2-D nearly-constant-velocity (position + velocity, p=2), with isotropic covariance:
-        >>> wpn_cv_2d = WeinerProcessNoise(2,2, np.array(0.1))
-        >>> wpn_cv_2d(np.array(0.1))
+        >>> wpn_cv_2d = WeinerProcessNoise(2,2, jnp.array(0.1))
+        >>> wpn_cv_2d(jnp.array(0.1))
         ... array([[3.33333333e-05, 0.00000000e+00, 5.00000000e-04, 0.00000000e+00],
         ...        [0.00000000e+00, 3.33333333e-05, 0.00000000e+00, 5.00000000e-04],
         ...        [5.00000000e-04, 0.00000000e+00, 1.00000000e-02, 0.00000000e+00],
@@ -76,8 +75,8 @@ class WeinerProcessNoise(ProcessNoise):
 
 
         # 2-D nearly-constant-velocity (position + velocity, p=2), with anisotropic covariance:
-        >>> wpn_cv_2d = WeinerProcessNoise(2,2, np.array([0.1,0.2]))
-        >>> wpn_cv_2d(np.array([0.5,1.]))
+        >>> wpn_cv_2d = WeinerProcessNoise(2,2, jnp.array([0.1,0.2]))
+        >>> wpn_cv_2d(jnp.array([0.5,1.]))
         ... array([[[0.00416667, 0.        , 0.0125    , 0.        ],
         ...         [0.        , 0.00833333, 0.        , 0.025     ],
         ...         [0.0125    , 0.        , 0.05      , 0.        ],
@@ -89,15 +88,15 @@ class WeinerProcessNoise(ProcessNoise):
         ...        [0.        , 0.1       , 0.        , 0.2       ]]])
 
         # 3-D nearly-constant-acceleration (position + velocity + acceleration, p=3) with anisotropic covariance:
-        >>> wpn_ca_3d = WeinerProcessNoise(3,3, np.array([0.01,0.02,0.014]))
-        >>> wpn_ca_3d(np.array([0.01,0.03])).shape
+        >>> wpn_ca_3d = WeinerProcessNoise(3,3, jnp.array([0.01,0.02,0.014]))
+        >>> wpn_ca_3d(jnp.array([0.01,0.03])).shape
         ... (2,9,9)
 
     """
 
     n: int
     p: int
-    intensity: FloatArray
+    intensity: JaxFloatArray
     dtype: DTypeLike = FDTYPE
 
     def __post_init__(self) -> None:
@@ -111,30 +110,30 @@ class WeinerProcessNoise(ProcessNoise):
         return self.n * self.p
 
     @cached_property
-    def _temporal_factors(self) -> tuple[FloatArray, FloatArray]:
+    def _temporal_factors(self) -> tuple[JaxFloatArray, JaxFloatArray]:
         """Precompute the (p, p) exponent and 1/coefficient grids.
 
         Returns ``(exponents, coeffs)`` such that
         ``tau[i, j] = dt ** exponents[i, j] * coeffs[i, j]``.
         """
         # a_i = p - 1 - i
-        prange = np.arange(self.p)
+        prange = jnp.arange(self.p)
         a = (self.p - 1) - prange  # (p,)
-        a_i = a[:, np.newaxis]  # (p, 1)
-        a_j = a[np.newaxis, :]  # (1, p)
+        a_i = a[:, jnp.newaxis]  # (p, 1)
+        a_j = a[jnp.newaxis, :]  # (1, p)
 
         exponents = a_i + a_j + 1  # (p, p)
 
-        factorials = scipy.special.factorial(prange)
+        factorials = jax.scipy.special.factorial(prange)
         denom = factorials[a_i] * factorials[a_j] * exponents
         coeffs = 1.0 / denom.astype(self.dtype)  # (p, p)
         return exponents.astype(self.dtype), coeffs
 
     @cached_property
-    def _intensity_matrix(self) -> FloatArray:
+    def _intensity_matrix(self) -> JaxFloatArray:
         return _full_intensity_matrix(self.intensity, self.n, dtype=self.dtype)
 
-    def covariance(self, dt: FloatArray) -> FloatArray:
+    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete process noise covariance $Q_d(\\Delta t)$.
 
         Args:
@@ -148,17 +147,16 @@ class WeinerProcessNoise(ProcessNoise):
         exponents, coeffs = self._temporal_factors
         Q_tilde = self._intensity_matrix  # (..., n, n)
 
-        # tau[..., i, j] = dt^exponents[i, j] * coeffs[i, j]
-        dt_b = dt[..., np.newaxis, np.newaxis]
+        dt_b = dt[..., jnp.newaxis, jnp.newaxis]
         tau = dt_b**exponents * coeffs  # (*dt_batch, p, p)
 
         # Q_d = tau ⊗ Q_tilde, batched over the leading dims of both.
         # Result block (i, j) is tau[..., i, j] * Q_tilde[..., :, :].
-        Qd: FloatArray = np.einsum("...ij,...ab->...iajb", tau, Q_tilde)
+        Qd = jnp.einsum("...ij,...ab->...iajb", tau, Q_tilde)
 
         # Determine final batch shape via broadcasting of dt and intensity batches.
         intensity_batch = Q_tilde.shape[:-2]
-        out_batch = np.broadcast_shapes(dt.shape, intensity_batch)
+        out_batch = jnp.broadcast_shapes(dt.shape, intensity_batch)
         return Qd.reshape((*out_batch, self.state_dim, self.state_dim))
 
 
@@ -189,12 +187,12 @@ class VanLoanProcessNoise(ProcessNoise):
         Qc: continuous time process noise.
 
     # 2-D nearly-constant-velocity (position + velocity, p=2), with isotropic covariance:
-    >>> A = np.array([[0,0,1,0],
+    >>> A = jnp.array([[0,0,1,0],
                       [0,0,0,1],
                       [0,0,0,0],
                       [0,0,0,0]])
-    >>> Q_c = np.zeros_like(A)
-    >>> Q_c[2:,2:] = np.eye(2)*0.1
+    >>> Q_c = jnp.zeros_like(A)
+    >>> Q_c[2:,2:] = jnp.eye(2)*0.1
     >>> vlpn_cv_2d = VanLoanProcessNoise(A,Q_c)
     >>> wpn_cv_2d(np.array(0.1))
     ... array([[3.33333333e-05, 0.00000000e+00, 5.00000000e-04, 0.00000000e+00],
@@ -203,12 +201,12 @@ class VanLoanProcessNoise(ProcessNoise):
     ...        [0.00000000e+00, 5.00000000e-04, 0.00000000e+00, 1.00000000e-02]])
     """
 
-    A: FloatArray
-    Qc: FloatArray
+    A: JaxFloatArray
+    Qc: JaxFloatArray
     dtype: type = FDTYPE
 
     def __post_init__(self):
-        shape = np.broadcast_shapes(self.A.shape, self.Qc.shape)
+        shape = jnp.broadcast_shapes(self.A.shape, self.Qc.shape)
         super().__init__(shape)
 
     @property
@@ -216,7 +214,7 @@ class VanLoanProcessNoise(ProcessNoise):
         return self.A.shape[-1]
 
     @cached_property
-    def coeff(self) -> FloatArray:
+    def coeff(self) -> JaxFloatArray:
         r"""The coefficient $C$ for the matrix $M  = C \Delta t$
         \begin{align*}
         M = \begin{bmatrix}
@@ -228,17 +226,15 @@ class VanLoanProcessNoise(ProcessNoise):
         """
         Q = self.Qc
         A = self.A
-        n = self.n
-        coeff = np.zeros((*A.shape[:-2], 2 * n, 2 * n), dtype=A.dtype)
-        coeff[..., :n, :n] = -A
-        coeff[..., :n, n:] = Q
-        coeff[..., n:, n:] = A.mT
-        return coeff
+        return jnp.block(
+            [[-A,Q],[jnp.zeros_like(A),A.mT]]
+        )
 
-    def covariance(self, dt: FloatArray) -> FloatArray:
+
+    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Compute covariance using van-loans discritization."""
         # compute matrix exponential.
-        exp_M = scipy.linalg.expm(self.coeff * dt[..., np.newaxis, np.newaxis])
+        exp_M = jax.scipy.linalg.expm(self.coeff * dt[..., jnp.newaxis, jnp.newaxis])
         n = self.n
 
         # e^{A^T dt} = F

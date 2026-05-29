@@ -4,10 +4,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Self, cast
 
-import numpy as np
-from numpy.typing import ArrayLike
+from jax import numpy as jnp
+from jax.typing import ArrayLike
 
-from pyfilter.hints import ArrayIndex, FloatArray
+from pyfilter.hints.jax_hints import ArrayIndex, JaxFloatArray
 from pyfilter.linear_solve import solve_symmetric_cholesky
 from pyfilter.types.covariance import (
     CovarianceBase,
@@ -16,11 +16,11 @@ from pyfilter.types.covariance import (
 )
 
 CHOLESK_SYMN_ = {"chofactor", "cho", "cholesky", "square-root"}
-ARRAY_SYMN_ = {"array", "np.ndarray", "FloatArray", "Array"}
+ARRAY_SYMN_ = {"array", "np.ndarray", "JaxFloatArray", "Array"}
 COV_SYMN_ = CHOLESK_SYMN_.union(ARRAY_SYMN_)
 
-type CovarianceType = CovarianceBase | FloatArray
-type Variable = GaussianRV[Any] | FloatArray | CovarianceBase | float
+type CovarianceType = CovarianceBase | JaxFloatArray
+type Variable = GaussianRV[Any] | JaxFloatArray | CovarianceBase | float
 
 
 class _ArrayUfuncWrangler:
@@ -35,10 +35,10 @@ class _ArrayUfuncWrangler:
 
         # Map ufuncs to corresponding GaussianRV methods
         self.ufunc_map: dict[Any, Callable[..., Any]] = {
-            np.add: self._handle_add,
-            np.subtract: self._handle_subtract,
-            np.multiply: self._handle_multiply,
-            np.matmul: self._handle_matmul,
+            jnp.add: self._handle_add,
+            jnp.subtract: self._handle_subtract,
+            jnp.multiply: self._handle_multiply,
+            jnp.matmul: self._handle_matmul,
         }
 
     def __call__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any:
@@ -72,7 +72,7 @@ class _ArrayUfuncWrangler:
             return inputs[1], inputs[0]
 
     def _handle_add(self, *inputs: Any, **kwargs: Any) -> GaussianRV[Any]:
-        """Handle np.add ufunc."""
+        """Handle jnp.add ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
         # Addition is commutative, so order doesn't matter
@@ -82,7 +82,7 @@ class _ArrayUfuncWrangler:
             return grv_operand.__radd__(other_operand)
 
     def _handle_subtract(self, *inputs: Any, **kwargs: Any) -> Any:
-        """Handle np.subtract ufunc."""
+        """Handle jnp.subtract ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
         # Subtraction is NOT commutative, so order matters
@@ -94,7 +94,7 @@ class _ArrayUfuncWrangler:
             return grv_operand.__rsub__(other_operand)
 
     def _handle_multiply(self, *inputs: Any, **kwargs: Any) -> Any:
-        """Handle np.multiply ufunc."""
+        """Handle jnp.multiply ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
         # Multiplication is commutative for our purposes
@@ -104,7 +104,7 @@ class _ArrayUfuncWrangler:
             return grv_operand.__rmul__(other_operand)
 
     def _handle_matmul(self, *inputs: Any, **kwargs: Any) -> GaussianRV[Any]:
-        """Handle np.matmul ufunc."""
+        """Handle jnp.matmul ufunc."""
         grv_operand, other_operand = self._identify_operands(*inputs)
 
         # Matrix multiplication is NOT commutative
@@ -118,7 +118,7 @@ class _ArrayUfuncWrangler:
 
 @dataclass
 class GaussianRV[Covariance: CovarianceType]:
-    mean: FloatArray
+    mean: JaxFloatArray
     covariance: Covariance
 
     def __post_init__(self) -> None:
@@ -192,10 +192,10 @@ class GaussianRV[Covariance: CovarianceType]:
         if isinstance(other, GaussianRV):
             if self.shape != other.shape:
                 raise ValueError(f"Incompatible shapes: {self.shape} and {other.shape}")
-        elif isinstance(other, np.ndarray):
+        elif isinstance(other, jnp.ndarray):
             # For array operations, check if broadcasting is valid
             try:
-                np.broadcast_shapes(self.mean.shape, other.shape)
+                jnp.broadcast_shapes(self.mean.shape, other.shape)
             except ValueError:
                 raise ValueError(
                     f"Cannot broadcast shapes {self.mean.shape} and {other.shape}"
@@ -264,13 +264,13 @@ class GaussianRV[Covariance: CovarianceType]:
         else:
             return GaussianRV(other - self.mean, self.covariance.copy())  # type: ignore[operator]
 
-    def __mul__(self, other: FloatArray | float) -> GaussianRV[Any]:
+    def __mul__(self, other: JaxFloatArray | float) -> GaussianRV[Any]:
         """Multiply GaussianRV by a deterministic matrix or scalar.
 
         For scalar a: Y = aX -> mean_Y = a*mean_X, cov_Y = a²*cov_X
         For matrix A: Y = AX -> mean_Y = A*mean_X, cov_Y = A*cov_X*A^T
         """
-        other = np.asarray(other, dtype=self.mean.dtype)
+        other = jnp.asarray(other, dtype=self.mean.dtype)
 
         if other.ndim == 0:  # scalar
             return GaussianRV(self.mean * other, self.covariance * (other**2))  # type: ignore[operator]
@@ -278,8 +278,8 @@ class GaussianRV[Covariance: CovarianceType]:
             # Treat as diagonal matrix multiplication
             self._check_compatible(other)
             # Broadcasting for batch dimensions
-            if isinstance(self.covariance, np.ndarray):
-                cov_scale = other[..., :, np.newaxis] * other[..., np.newaxis, :]
+            if isinstance(self.covariance, jnp.ndarray):
+                cov_scale = other[..., :, jnp.newaxis] * other[..., jnp.newaxis, :]
                 return GaussianRV(self.mean * other, self.covariance * cov_scale)
             else:
                 raise TypeError(
@@ -294,30 +294,30 @@ class GaussianRV[Covariance: CovarianceType]:
                 )
 
             # Batch matrix multiply for mean: (..., m, n) @ (..., n) -> (..., m)
-            new_mean = np.einsum("...ij,...j->...i", other, self.mean)
+            new_mean = jnp.einsum("...ij,...j->...i", other, self.mean)
 
             # Batch computation of A @ Cov @ A.T
-            if isinstance(self.covariance, np.ndarray):
+            if isinstance(self.covariance, jnp.ndarray):
                 # Step 1: A @ Cov -> (..., m, n) @ (..., n, n) -> (..., m, n)
-                temp = np.einsum("...ij,...jk->...ik", other, self.covariance)
+                temp = jnp.einsum("...ij,...jk->...ik", other, self.covariance)
                 # Step 2: (A @ Cov) @ A.T -> (..., m, n) @ (..., n, m) -> (..., m, m)
-                new_cov = np.einsum("...ij,...kj->...ik", temp, other)
+                new_cov = jnp.einsum("...ij,...kj->...ik", temp, other)
             else:
                 new_cov = self.covariance.quadratic_form(other)
 
             return GaussianRV(new_mean, new_cov)
 
-    def __rmul__(self, other: FloatArray | float) -> GaussianRV[Any]:
+    def __rmul__(self, other: JaxFloatArray | float) -> GaussianRV[Any]:
         """Right multiplication (for scalar/array * GaussianRV)."""
         return self.__mul__(other)
 
-    def __matmul__(self, other: FloatArray) -> GaussianRV[Any]:
+    def __matmul__(self, other: JaxFloatArray) -> GaussianRV[Any]:
         """Matrix multiplication using @ operator (same as __mul__ for matrices)."""
-        if not isinstance(other, np.ndarray) or other.ndim < 2:
+        if not isinstance(other, jnp.ndarray) or other.ndim < 2:
             raise ValueError("@ operator requires a matrix (array with ndim >= 2)")
         return self.__mul__(other)
 
-    def __rmatmul__(self, other: FloatArray) -> GaussianRV[Any]:
+    def __rmatmul__(self, other: JaxFloatArray) -> GaussianRV[Any]:
         """Right matrix multiplication (for A @ self)."""
         # 'other' is the matrix A on the left
         # We can just call our existing __matmul__ method,
@@ -326,11 +326,11 @@ class GaussianRV[Covariance: CovarianceType]:
 
     def __repr__(self) -> str:
         trace = (
-            np.trace(self.covariance, axis1=-2, axis2=-1).sum()
-            if isinstance(self.covariance, np.ndarray)
+            jnp.trace(self.covariance, axis1=-2, axis2=-1).sum()
+            if isinstance(self.covariance, jnp.ndarray)
             else self.covariance.trace()
         )
-        return f"GaussianRV(shape={self.shape}, mean_norm={np.linalg.norm(self.mean):.3f}, cov_trace={trace})"
+        return f"GaussianRV(shape={self.shape}, mean_norm={jnp.linalg.norm(self.mean):.3f}, cov_trace={trace})"
 
     def __getitem__(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """General indexing
@@ -346,8 +346,8 @@ class GaussianRV[Covariance: CovarianceType]:
 
     def marginal(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """Extract marginal distribution for specified indices."""
-        idx = np.atleast_1d(cast("ArrayLike", indices))
-        row, col = np.ix_(idx, idx)
+        idx = jnp.atleast_1d(cast("ArrayLike", indices))
+        row, col = jnp.ix_(idx, idx)
         if isinstance(self.covariance, CovarianceBase):
             if isinstance(indices, slice):
                 mcov = self.covariance[..., indices, indices]  # type: ignore[assignment]
@@ -362,8 +362,8 @@ class GaussianRV[Covariance: CovarianceType]:
     def conditional_mean(
         self,
         other: GaussianRV[Any],
-        cross_covariance: FloatArray,
-        given_value: FloatArray | None = None,
+        cross_covariance: JaxFloatArray,
+        given_value: JaxFloatArray | None = None,
     ) -> GaussianRV[Any]:
         r"""Compute the conditional mean of self given other.
 
@@ -394,22 +394,22 @@ class GaussianRV[Covariance: CovarianceType]:
         if given_value is None:
             x2 = other.mean
         else:
-            x2 = np.asarray(given_value, dtype=other.mean.dtype)
+            x2 = jnp.asarray(given_value, dtype=other.mean.dtype)
 
         residual = x2 - other.mean
         sigma22_inv_residual = solve_symmetric_cholesky(
-            other.covariance, residual[..., np.newaxis]
+            other.covariance, residual[..., jnp.newaxis]
         )[..., 0]
 
-        return self.mean + np.einsum(
+        return self.mean + jnp.einsum(
             "...ij,...j->...i", cross_covariance, sigma22_inv_residual
         )
 
     def conditional(
         self,
         other: GaussianRV[Any],
-        cross_covariance: FloatArray,
-        given_value: FloatArray | None = None,
+        cross_covariance: JaxFloatArray,
+        given_value: JaxFloatArray | None = None,
     ) -> GaussianRV[Any]:
         """Compute the conditional distribution of self given other.
 
@@ -439,7 +439,7 @@ class GaussianRV[Covariance: CovarianceType]:
             GaussianRV: The conditional distribution X1|X2=given_value
         """
         # Validate inputs
-        cross_covariance = np.asarray(cross_covariance, dtype=self.mean.dtype)
+        cross_covariance = jnp.asarray(cross_covariance, dtype=self.mean.dtype)
 
         # Check dimensions
         n1 = len(self)
@@ -455,13 +455,13 @@ class GaussianRV[Covariance: CovarianceType]:
         if given_value is None:
             x2 = other.mean
         else:
-            x2 = np.asarray(given_value, dtype=other.mean.dtype)
+            x2 = jnp.asarray(given_value, dtype=other.mean.dtype)
 
         residual = x2 - other.mean
 
         # Compute Σ22^(-1) @ residual
         sigma22_inv_residual = solve_symmetric_cholesky(
-            other.covariance, residual[..., np.newaxis]
+            other.covariance, residual[..., jnp.newaxis]
         )[..., 0]
 
         # Compute Σ22^(-1) @ Σ21
@@ -470,13 +470,13 @@ class GaussianRV[Covariance: CovarianceType]:
         )
 
         # Compute conditional mean: μ1 + Σ12 @ Σ22^(-1) @ (x2 - μ2)
-        conditional_mean = self.mean + np.einsum(
+        conditional_mean = self.mean + jnp.einsum(
             "...ij,...j->...i", cross_covariance, sigma22_inv_residual
         )
 
         # Compute conditional covariance: Σ11 - Σ12 @ Σ22^(-1) @ Σ21
         # Shape: (..., n1, n1) - (..., n1, n2) @ (..., n2, n1) -> (..., n1, n1)
-        conditional_cov = self.covariance - np.einsum(
+        conditional_cov = self.covariance - jnp.einsum(
             "...ik,...kj->...ij", cross_covariance, sigma22_inv_sigma21
         )
 
@@ -485,7 +485,7 @@ class GaussianRV[Covariance: CovarianceType]:
     def joint(
         self,
         other: GaussianRV[Any],
-        cross_covariance: FloatArray,
+        cross_covariance: JaxFloatArray,
         covariance_type: str = "array",
     ) -> GaussianRV[Any]:
         """Create joint distribution of self and other.
@@ -511,7 +511,7 @@ class GaussianRV[Covariance: CovarianceType]:
                 f"covariance_type:{covariance_type} not an allowable type. Allowable types are\n:{COV_SYMN_}"
             )
 
-        cross_covariance = np.asarray(cross_covariance, dtype=self.mean.dtype)
+        cross_covariance = jnp.asarray(cross_covariance, dtype=self.mean.dtype)
 
         # Validate dimensions
         n1 = len(self)
@@ -524,40 +524,37 @@ class GaussianRV[Covariance: CovarianceType]:
             )
 
         # Get common batch shape
-        batch_shape = np.broadcast_shapes(
+        batch_shape = jnp.broadcast_shapes(
             self.shape[:-1], other.shape[:-1], cross_covariance.shape[:-2]
         )
 
         # Broadcast means
-        self_mean_bc = np.broadcast_to(self.mean, batch_shape + (n1,))
-        other_mean_bc = np.broadcast_to(other.mean, batch_shape + (n2,))
+        self_mean_bc = jnp.broadcast_to(self.mean, batch_shape + (n1,))
+        other_mean_bc = jnp.broadcast_to(other.mean, batch_shape + (n2,))
 
         # Concatenate means
-        joint_mean = np.concatenate([self_mean_bc, other_mean_bc], axis=-1)
+        joint_mean = jnp.concatenate([self_mean_bc, other_mean_bc], axis=-1)
 
         # Broadcast covariances
         self_cov = (
             self.covariance
-            if isinstance(self.covariance, np.ndarray)
+            if isinstance(self.covariance, jnp.ndarray)
             else self.covariance.full()
         )
         other_cov = (
             other.covariance
-            if isinstance(other.covariance, np.ndarray)
+            if isinstance(other.covariance, jnp.ndarray)
             else other.covariance.full()
         )
-        self_cov_bc = np.broadcast_to(self_cov, batch_shape + (n1, n1))
-        other_cov_bc = np.broadcast_to(other_cov, batch_shape + (n2, n2))
-        cross_cov_bc = np.broadcast_to(cross_covariance, batch_shape + (n1, n2))
+        self_cov_bc = jnp.broadcast_to(self_cov, batch_shape + (n1, n1))
+        other_cov_bc = jnp.broadcast_to(other_cov, batch_shape + (n2, n2))
+        cross_cov_bc = jnp.broadcast_to(cross_covariance, batch_shape + (n1, n2))
 
         # Build joint covariance matrix
-        # [[Σ11, Σ12],
-        #  [Σ21, Σ22]]
-        joint_cov = np.zeros(batch_shape + (n1 + n2, n1 + n2), dtype=self.mean.dtype)
-        joint_cov[..., :n1, :n1] = self_cov_bc
-        joint_cov[..., n1:, n1:] = other_cov_bc
-        joint_cov[..., :n1, n1:] = cross_cov_bc
-        joint_cov[..., n1:, :n1] = np.swapaxes(cross_cov_bc, -2, -1)
+        joint_cov = jnp.block(
+            [[self_cov_bc,cross_cov_bc],
+             [cross_cov_bc.mT,other_cov_bc]]
+        )
 
         jcov = (
             cholesky_factor(joint_cov)
@@ -566,7 +563,7 @@ class GaussianRV[Covariance: CovarianceType]:
         )
         return GaussianRV(joint_mean, jcov)
 
-    def linear_cross(self, A: FloatArray) -> FloatArray:
+    def linear_cross(self, A: JaxFloatArray) -> JaxFloatArray:
         """Compute cross-covariance Cov(X, AX) = Σ_X @ A^T.
 
         This is useful for computing cross-covariances in filtering applications,
@@ -579,7 +576,7 @@ class GaussianRV[Covariance: CovarianceType]:
         Returns:
             NDArray: Cross-covariance Cov(X, Y) = Σ_X @ A^T with shape (..., n, m)
         """
-        A = np.asarray(A, dtype=self.mean.dtype)
+        A = jnp.asarray(A, dtype=self.mean.dtype)
 
         # Check dimensions
         n = len(self)
@@ -588,27 +585,27 @@ class GaussianRV[Covariance: CovarianceType]:
                 f"Matrix A column dimension {A.shape[-1]} must match state dimension {n}"
             )
 
-        if isinstance(self.covariance, np.ndarray):
-            return np.einsum("...ij,...kj->...ik", self.covariance, A)
+        if isinstance(self.covariance, jnp.ndarray):
+            return jnp.einsum("...ij,...kj->...ik", self.covariance, A)
 
         return linear_cross_covariance(self.covariance, A)  # type: ignore[return-value]
 
     @classmethod
     def zero_mean(cls, covariance: CovarianceType) -> Self:
         """Zero mean gaussian random variable."""
-        return cls(np.zeros(covariance.shape[:-1]), covariance)
+        return cls(jnp.zeros(covariance.shape[:-1]), covariance)
 
     @classmethod
     def concatenate[CovarianceT: CovarianceBase](
         cls,
         variables: Iterable[GaussianRV[CovarianceT]],
-        axis: int | tuple[int, ...] = 0,
+        axis: int = 0,
     ) -> GaussianRV[CovarianceT]:
         if len(variables) == 0:
             raise ValueError("Variables to concatenate must not be empty.")
-        mean = np.concatenate([rv.mean for rv in variables], axis=axis)
-        if isinstance(variables[0].covariance, np.ndarray):
-            covariance = np.concatenate([rv.covariance for rv in variables], axis=axis)
+        mean = jnp.concatenate([rv.mean for rv in variables], axis=axis)
+        if isinstance(variables[0].covariance, jnp.ndarray):
+            covariance = jnp.concatenate([rv.covariance for rv in variables], axis=axis)
         else:
             covariance = type(variables[0].covariance).concatenate(
                 [rv.covariance for rv in variables], axis=axis

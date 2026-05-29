@@ -1,7 +1,5 @@
 import time
 
-import numpy as np
-
 
 def batched_matmul(n: int, m: int):
     A = np.random.random(size=(n, m, m))

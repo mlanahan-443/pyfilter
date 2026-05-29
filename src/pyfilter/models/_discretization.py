@@ -1,15 +1,15 @@
-import numpy as np
-import scipy
+import jax.scipy
+from jax import numpy as jnp
 
-from ..hints import FloatArray
+from pyfilter.hints.jax_hints import JaxFloatArray
 
 
-def expm_discretizer(A: FloatArray, dt: FloatArray) -> FloatArray:
+def expm_discretizer(A: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
     """Exact discretization: Phi = expm(A * dt)."""
-    return scipy.linalg.expm(A * dt)
+    return jax.scipy.linalg.expm(A * dt)
 
 
-def euler_discretizer(A: FloatArray, dt: FloatArray) -> FloatArray:
+def euler_discretizer(A: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
     """First-order Euler: Phi = I + A * dt."""
-    eye = np.eye(A.shape[-1], dtype=A.dtype)
+    eye = jnp.eye(A.shape[-1], dtype=A.dtype)
     return eye + A * dt

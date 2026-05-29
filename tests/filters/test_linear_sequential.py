@@ -1,11 +1,11 @@
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
+from jax import numpy as jnp
 
 from pyfilter.filter.linear import LinearGaussianKalman
-from pyfilter.hints import FloatArray
+from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
@@ -17,18 +17,18 @@ def data_path() -> Path:
 
 
 class TransitionModel(LinearTransitionBase):
-    def matrix(self, dt: FloatArray) -> FloatArray:
-        A = np.zeros(dt.shape + (6, 6))
-        A[..., np.diag_indices(6)] = 1
+    def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
+        A = jnp.zeros(dt.shape + (6, 6))
+        A[..., jnp.diag_indices(6)] = 1
         A[..., 0, 1] = A[..., 1, 2] = A[..., 3, 4] = A[..., 4, 5] = dt
         A[..., 0, 2] = A[..., 3, 5] = 0.5 * dt**2
 
         return A
 
-    def inverse(self, dt: FloatArray):
-        return np.linalg.inv(self.matrix(dt))
+    def inverse(self, dt: JaxFloatArray):
+        return jnp.linalg.inv(self.matrix(dt))
 
-    def transform(self, x: GaussianRV, dt: FloatArray) -> GaussianRV:
+    def transform(self, x: GaussianRV, dt: JaxFloatArray) -> GaussianRV:
         return self.matrix(dt) @ x
 
 
@@ -37,8 +37,8 @@ class MeasurementModel(LinearTransformBase):
         return x.marginal(np.array([0, 3]))
 
     @property
-    def matrix(self) -> FloatArray:
-        H = np.zeros((2, 6))
+    def matrix(self) -> JaxFloatArray:
+        H = jnp.zeros((2, 6))
         H[0, 0] = 1
         H[1, 3] = 1
         return H
@@ -49,17 +49,17 @@ class ProcessNoiseModel(ProcessNoise):
         super().__init__(shape)
         self._intensity = intensity
 
-    def covariance(self, dt: FloatArray) -> GaussianRV:
-        block = np.empty(dt.shape + (3, 3))
+    def covariance(self, dt: JaxFloatArray) -> GaussianRV:
+        block = jnp.empty(dt.shape + (3, 3))
         block[..., 0, 0] = 0.25 * dt**4
         block[..., 0, 1] = block[..., 1, 0] = 0.5 * dt**3
         block[..., 0, 2] = block[..., 2, 0] = 0.5 * dt**2
         block[..., 1, 2] = block[..., 2, 1] = dt
         block[..., 1, 1] = dt**2
-        block[..., 2, 2] = np.ones_like(dt)
+        block[..., 2, 2] = jnp.ones_like(dt)
 
-        zeros = np.zeros_like(block)
-        mat = self._intensity * np.block([[block, zeros], [zeros, block]])
+        zeros = jnp.zeros_like(block)
+        mat = self._intensity * jnp.block([[block, zeros], [zeros, block]])
         return GaussianRV.zero_mean(mat)
 
 
@@ -70,8 +70,8 @@ def variance() -> float:
 
 
 @pytest.fixture
-def dt() -> FloatArray:
-    return np.array(1.0)
+def dt() -> JaxFloatArray:
+    return jnp.array(1.0)
 
 
 @pytest.fixture
@@ -108,14 +108,14 @@ def meas_variance() -> float:
 
 
 @pytest.fixture
-def measurement_covariance(meas_variance: float) -> FloatArray:
-    return np.array([[meas_variance, 0], [0, meas_variance]])
+def measurement_covariance(meas_variance: float) -> JaxFloatArray:
+    return jnp.array([[meas_variance, 0], [0, meas_variance]])
 
 
 def test_linear_filter(
     linear_filter: LinearGaussianKalman,
-    measurement_covariance: FloatArray,
-    dt: FloatArray,
+    measurement_covariance: JaxFloatArray,
+    dt: JaxFloatArray,
     data_path: Path,
 ):
     """Test the linear filter against known output."""
@@ -125,11 +125,11 @@ def test_linear_filter(
 
     measurements = GaussianRV(
         measurement_means,
-        np.repeat(
+        jnp.repeat(
             measurement_covariance[np.newaxis, ...], len(measurement_means), axis=0
         ),
     )
-    state = GaussianRV(np.zeros(6), np.diag(np.ones(6)) * 500)
+    state = GaussianRV(np.zeros(6), jnp.diag(np.ones(6)) * 500)
 
     for i in range(len(measurements)):
         prediction = linear_filter.predict(state, dt)
@@ -138,4 +138,4 @@ def test_linear_filter(
 
     # Verify the filter converged to a reasonable estimate
     assert state.mean.shape == (6,)
-    assert np.all(np.isfinite(state.mean))
+    assert jnp.all(np.isfinite(state.mean))

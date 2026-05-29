@@ -15,20 +15,21 @@ The results demonstrate that either numba or Jax acceleration yield a significan
 The numba kernel produces less jitter than the jax kernel.
 """
 
+import jax
 import numba
-import numpy as np
 import rich
+from jax import numpy as jnp
 from numpy.random import default_rng
 from numpy.typing import NDArray
 
 from pyfilter.gutil import LineProfiler
 from pyfilter.models.linear import GaussianSelectionTransform, IntegratorChainTransition
 from pyfilter.types.process_noise import WeinerProcessNoise
-import jax
+
 jax.config.update("jax_enable_x64", True)
 
-from jax import numpy as jnp
 import time
+
 
 def numpy_kalman_step(
     x: np.ndarray, P: np.ndarray, z: np.ndarray,
@@ -170,8 +171,8 @@ def main():
     )
 
     rich.print(numpy_profiler)
-    
-    #Jax 
+
+    #Jax
     #Convert to jax arrays.
     args = tuple(jnp.asarray(a) for a in [x0, P0, z, F, H, R, Q])
 
@@ -193,17 +194,17 @@ def main():
         repeat = 5
     )
     rich.print(jax_profiler)
-    
+
     #Numba
     #Numba is picky about datatypes
     args = tuple(arr.astype(np.float64) for arr in [x0,P0,z,F,H,R,Q])
-    
+
     #Check compile time
     start = time.time()
     numbda_filter(*args)
     end = time.time()
     print(f"Numba Compile Time: {round((end - start)*1e3)} ms")
-    
+
     #Profile.
     numba_profiler = LineProfiler("Numba")
     numba_profiler.timeit(

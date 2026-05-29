@@ -13,3 +13,5 @@ pandas-stubs
 ipykernel>=7.2.0
 matplotlib
 rich
+numba
+jaxtyping
