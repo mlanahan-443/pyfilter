@@ -1,46 +1,49 @@
 # test_wiener_process_noise.py
+import jax
+import numpy as np
 import pytest
 from jax import numpy as jnp
 
-from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types.process_noise import VanLoanProcessNoise, WeinerProcessNoise
+
+jax.config.update("jax_enable_x64", True)
 
 
 def integrator_chain_A(n: int, p: int) -> jnp.ndarray:
     """Continuous-time generator for the integrator chain (for cross-checks)."""
     d = n * p
-    A = jnp.zeros((d, d))
+    A = np.zeros((d, d))
     for i in range(p - 1):
-        A[i * n : (i + 1) * n, (i + 1) * n : (i + 2) * n] = jnp.eye(n)
-    return A
+        A[i * n : (i + 1) * n, (i + 1) * n : (i + 2) * n] = np.eye(n)
+    return jnp.asarray(A)
 
 
 def s(x: float) -> jnp.ndarray:
     """Convenience: scalar dt as a 0-d array (matches the typed contract)."""
-    return jnp.asarray(x, dtype=FDTYPE)
+    return jnp.asarray(x)
 
 
 class TestConstruction:
     def test_invalid_n(self) -> None:
         with pytest.raises(ValueError, match="n and p must be >= 1"):
-            WeinerProcessNoise(n=0, p=2, intensity=np.asarray(1.0))
+            WeinerProcessNoise(n=0, p=2, intensity=jnp.asarray(1.0))
 
     def test_invalid_p(self) -> None:
         with pytest.raises(ValueError, match="n and p must be >= 1"):
-            WeinerProcessNoise(n=2, p=0, intensity=np.asarray(1.0))
+            WeinerProcessNoise(n=2, p=0, intensity=jnp.asarray(1.0))
 
     def test_state_dim(self) -> None:
-        noise = WeinerProcessNoise(n=3, p=4, intensity=np.asarray(1.0))
+        noise = WeinerProcessNoise(n=3, p=4, intensity=jnp.asarray(1.0))
         assert noise.state_dim == 12
 
     def test_invalid_1d_intensity_shape(self) -> None:
-        noise = WeinerProcessNoise(n=3, p=2, intensity=np.array([1.0, 2.0]))
+        noise = WeinerProcessNoise(n=3, p=2, intensity=jnp.array([1.0, 2.0]))
         with pytest.raises(ValueError, match="1-D intensity must have length 3"):
             _ = noise._intensity_matrix
 
     def test_invalid_matrix_intensity_shape(self) -> None:
-        noise = WeinerProcessNoise(n=3, p=2, intensity=np.eye(2))
+        noise = WeinerProcessNoise(n=3, p=2, intensity=jnp.eye(2))
         with pytest.raises(ValueError, match=r"trailing shape \(3, 3\)"):
             _ = noise._intensity_matrix
 
@@ -53,7 +56,7 @@ class TestConstantVelocity:
     @pytest.mark.parametrize("dt_val", [0.01, 0.1, 1.0, 5.0])
     @pytest.mark.parametrize("sigma2", [0.1, 1.0, 10.0])
     def test_matches_analytical(self, n: int, dt_val: float, sigma2: float) -> None:
-        noise = WeinerProcessNoise(n=n, p=2, intensity=np.asarray(sigma2))
+        noise = WeinerProcessNoise(n=n, p=2, intensity=jnp.asarray(sigma2))
         Qd = noise.covariance(s(dt_val))
 
         I = jnp.eye(n)
@@ -63,7 +66,7 @@ class TestConstantVelocity:
                 [(dt_val**2 / 2) * I, dt_val * I],
             ]
         )
-        jnp.testing.assert_allclose(Qd, expected, atol=1e-14)
+        np.testing.assert_allclose(Qd, expected, atol=1e-14)
 
 
 class TestConstantAcceleration:
@@ -71,7 +74,7 @@ class TestConstantAcceleration:
     @pytest.mark.parametrize("dt_val", [0.05, 0.5, 2.0])
     def test_matches_analytical(self, n: int, dt_val: float) -> None:
         sigma2 = 1.5
-        noise = WeinerProcessNoise(n=n, p=3, intensity=np.asarray(sigma2))
+        noise = WeinerProcessNoise(n=n, p=3, intensity=jnp.asarray(sigma2))
         Qd = noise.covariance(s(dt_val))
 
         I = jnp.eye(n)
@@ -83,7 +86,7 @@ class TestConstantAcceleration:
                 [(dt_val**3 / 6) * I, (dt_val**2 / 2) * I, dt_val * I],
             ]
         )
-        jnp.testing.assert_allclose(Qd, expected, atol=1e-13)
+        np.testing.assert_allclose(Qd, expected, atol=1e-13)
 
 
 class TestIntensityForms:
@@ -92,13 +95,13 @@ class TestIntensityForms:
         noise = WeinerProcessNoise(n=2, p=2, intensity=np.asarray(3.0))
         Qd = noise.covariance(s(0.1))
         # Top-left block is sigma^2 * dt^3/3 * I_2 = 3 * 0.001/3 * I_2 = 0.001 * I_2
-        jnp.testing.assert_allclose(Qd[:2, :2], 0.001 * jnp.eye(2), atol=1e-15)
+        np.testing.assert_allclose(Qd[:2, :2], 0.001 * jnp.eye(2), atol=1e-15)
 
     def test_scalar_vs_diagonal_equivalence(self) -> None:
         """Scalar 2.0 should match diagonal [2, 2, 2]."""
         n_scalar = WeinerProcessNoise(n=3, p=2, intensity=np.asarray(2.0))
         n_diag = WeinerProcessNoise(n=3, p=2, intensity=np.array([2.0, 2.0, 2.0]))
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             n_scalar.covariance(s(0.5)),
             n_diag.covariance(s(0.5)),
             atol=1e-15,
@@ -109,12 +112,12 @@ class TestIntensityForms:
         noise = WeinerProcessNoise(
             n=2,
             p=2,
-            intensity=np.array([1.0, 4.0]),
+            intensity=jnp.array([1.0, 4.0]),
         )
         Qd = noise.covariance(s(0.1))
         # Block (0, 0) should be (dt^3/3) * diag(1, 4)
-        expected_top_left = (0.1**3 / 3) * jnp.diag([1.0, 4.0])
-        jnp.testing.assert_allclose(Qd[:2, :2], expected_top_left, atol=1e-15)
+        expected_top_left = (0.1**3 / 3) * jnp.diag(jnp.asarray([1.0, 4.0]))
+        np.testing.assert_allclose(Qd[:2, :2], expected_top_left, atol=1e-15)
 
     def test_full_matrix_intensity(self) -> None:
         """Full (n, n) intensity matrix with off-diagonal coupling."""
@@ -123,13 +126,13 @@ class TestIntensityForms:
         Qd = noise.covariance(s(0.1))
 
         # Top-left block: (dt^3 / 3) * Q_tilde
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             Qd[:2, :2],
             (0.1**3 / 3) * Q_tilde,
             atol=1e-15,
         )
         # Bottom-right: dt * Q_tilde
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             Qd[2:, 2:],
             0.1 * Q_tilde,
             atol=1e-15,
@@ -141,7 +144,7 @@ class TestAlgebraicProperties:
     def test_zero_dt_gives_zero(self, n: int, p: int) -> None:
         noise = WeinerProcessNoise(n=n, p=p, intensity=np.asarray(1.0))
         Qd = noise.covariance(s(0.0))
-        jnp.testing.assert_allclose(Qd, 0.0, atol=1e-15)
+        np.testing.assert_allclose(Qd, 0.0, atol=1e-15)
 
     @pytest.mark.parametrize("n,p", [(2, 2), (3, 3), (2, 4)])
     @pytest.mark.parametrize("dt_val", [0.1, 1.0, 3.0])
@@ -149,7 +152,7 @@ class TestAlgebraicProperties:
         """The closed form is symmetric by construction (no fp asymmetry)."""
         noise = WeinerProcessNoise(n=n, p=p, intensity=np.asarray(1.5))
         Qd = noise.covariance(s(dt_val))
-        jnp.testing.assert_array_equal(Qd, Qd.T)
+        np.testing.assert_array_equal(Qd, Qd.T)
 
     @pytest.mark.parametrize("n,p", [(2, 2), (3, 3), (2, 4)])
     @pytest.mark.parametrize("dt_val", [0.01, 1.0, 5.0])
@@ -179,7 +182,7 @@ class TestBatching:
 
         # Each slice should match the corresponding 0-d call.
         for i in range(len(dts)):
-            jnp.testing.assert_allclose(
+            np.testing.assert_allclose(
                 Qd[i],
                 noise.covariance(s(float(dts[i]))),
                 atol=1e-14,
@@ -199,8 +202,8 @@ class TestBatching:
         Qd = noise.covariance(s(0.1))
         assert Qd.shape == (3, 4, 4)
         # Linear-in-intensity check
-        jnp.testing.assert_allclose(Qd[1], 2.0 * Qd[0], atol=1e-15)
-        jnp.testing.assert_allclose(Qd[2], 3.0 * Qd[0], atol=1e-15)
+        np.testing.assert_allclose(Qd[1], 2.0 * Qd[0], atol=1e-15)
+        np.testing.assert_allclose(Qd[2], 3.0 * Qd[0], atol=1e-15)
 
     def test_batched_intensity_and_dt_broadcast(self) -> None:
         """Compatible-broadcast batches of dt and intensity."""
@@ -214,7 +217,7 @@ class TestBatching:
         # Verify each slice matches a manual scalar computation
         for i, (dt_i, sigma2) in enumerate(zip(dts, [1.0, 2.0, 3.0], strict=False)):
             ref = WeinerProcessNoise(n=2, p=2, intensity=np.asarray(sigma2))
-            jnp.testing.assert_allclose(
+            np.testing.assert_allclose(
                 Qd[i],
                 ref.covariance(s(float(dt_i))),
                 atol=1e-14,
@@ -236,7 +239,7 @@ class TestBatching:
                     p=2,
                     intensity=np.asarray(float(j + 1)),
                 )
-                jnp.testing.assert_allclose(
+                np.testing.assert_allclose(
                     Qd[i, j],
                     ref.covariance(s(float(dts[i, 0]))),
                     atol=1e-14,
@@ -257,13 +260,11 @@ class TestVanLoan:
         wpn = WeinerProcessNoise(n, p, intensities)
         A = integrator_chain_A(n, p)
         d = n * p
-        Qc = jnp.zeros((d, d))
-        Qc[(p - 1) * n :, (p - 1) * n :] = intensities * jnp.eye(
-            n
-        )  # noise only on highest deriv
+        Qc = np.zeros((d, d))
+        Qc[(p - 1) * n :, (p - 1) * n :] = intensities * np.eye(n)  # noise only on highest deriv
 
-        vlpn = VanLoanProcessNoise(A, Qc)
+        vlpn = VanLoanProcessNoise(A, jnp.asarray(Qc))
 
         dt = jnp.asarray(dt_val)
 
-        jnp.testing.assert_allclose(vlpn.covariance(dt), wpn.covariance(dt), atol=1e-14)
+        np.testing.assert_allclose(vlpn.covariance(dt), wpn.covariance(dt), atol=1e-14)

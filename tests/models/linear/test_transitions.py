@@ -1,9 +1,13 @@
 # test_transitions.py
+import jax
 import jax.scipy.linalg
+import numpy as np
 import pytest
 from jax import numpy as jnp
 
 from pyfilter.models.linear import IntegratorChainTransition
+
+jax.config.update("jax_enable_x64", True)
 
 
 class TestConstruction:
@@ -20,11 +24,6 @@ class TestConstruction:
         with pytest.raises(ValueError, match="p must be >= 1"):
             IntegratorChainTransition(n=3, p=0)
 
-    def test_frozen(self) -> None:
-        chain = IntegratorChainTransition(n=2, p=2)
-        with pytest.raises(Exception):  # FrozenInstanceError
-            chain.n = 3  # type: ignore[misc]
-
 
 class TestAgainstExpm:
     """The closed form should match expm(A*dt) to ~machine precision."""
@@ -35,16 +34,16 @@ class TestAgainstExpm:
     @pytest.mark.parametrize("dt", [0.1, 1.0, 5.0])
     def test_phi_matches_expm(self, n: int, p: int, dt: float) -> None:
         chain = IntegratorChainTransition(n=n, p=p)
-        Phi_closed = chain.matrix(np.asarray(dt))
+        Phi_closed = chain.matrix(jnp.asarray(dt))
         Phi_expm = jax.scipy.linalg.expm(chain.A * dt)
 
-        jnp.testing.assert_allclose(Phi_closed, Phi_expm, atol=1e-12, rtol=1e-12)
+        np.testing.assert_allclose(Phi_closed, Phi_expm, atol=1e-12, rtol=1e-12)
 
 
 class TestBatching:
     def test_scalar_dt(self) -> None:
         chain = IntegratorChainTransition(n=2, p=2)
-        Phi = chain.matrix(np.asarray(0.5))
+        Phi = chain.matrix(jnp.asarray(0.5))
         assert Phi.shape == (4, 4)
 
     def test_1d_batch(self) -> None:
@@ -55,8 +54,8 @@ class TestBatching:
 
         # Each slice should match the corresponding scalar call.
         for i, dt in enumerate(dts):
-            Phi_i = chain.matrix(np.asarray(dt))
-            jnp.testing.assert_allclose(Phi[i], Phi_i, atol=1e-14)
+            Phi_i = chain.matrix(jnp.asarray(dt))
+            np.testing.assert_allclose(Phi[i], Phi_i, atol=1e-14)
 
     def test_2d_batch(self) -> None:
         chain = IntegratorChainTransition(n=1, p=2)
@@ -75,14 +74,14 @@ class TestGeneratorMatrix:
                 [np.zeros((3, 3)), jnp.zeros((3, 3))],
             ]
         )
-        jnp.testing.assert_array_equal(chain.A, expected)
+        np.testing.assert_array_equal(chain.A, expected)
 
     def test_A_is_nilpotent(self) -> None:
         """A^p = 0 for an integrator chain of order p."""
         for p in [2, 3, 4, 5]:
             chain = IntegratorChainTransition(n=2, p=p)
             A_pow = jnp.linalg.matrix_power(chain.A, p)
-            jnp.testing.assert_allclose(A_pow, 0.0, atol=1e-15)
+            np.testing.assert_allclose(A_pow, 0.0, atol=1e-15)
 
     def test_A_minus_one_power_nonzero(self) -> None:
         """A^(p-1) is nonzero (nilpotency index is exactly p)."""

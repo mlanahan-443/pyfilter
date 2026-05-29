@@ -6,14 +6,13 @@ import jax
 import jax.scipy.special
 from jax import numpy as jnp
 
-from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints.jax_hints import JaxBoolArray, JaxFloatArray
 from pyfilter.types import RandomVariable
 
 from ._base import LinearTransitionBase
 
 
-@dataclass(frozen=True)
+@dataclass
 class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[State]):
     r"""Integrator chain transition for p integrators in n spatial dimensions.
 
@@ -57,8 +56,8 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         9
     """
 
-    n: int | None = None
-    p: int | None = None
+    n: int
+    p: int
 
     def __post_init__(self) -> None:
         if self.n is None:
@@ -92,19 +91,19 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         valid = lag >= 0
         lag_safe = jnp.where(valid, lag, 0)
 
-        factorials = jax.scipy.special.factorial(jnp.arange(self.p)).astype(lag_safe.dtype)
+        factorials = jax.scipy.special.factorial(jnp.arange(self.p))
         inv_factorial = 1.0 / factorials[lag_safe]
-        return valid, lag_safe.astype(FDTYPE), inv_factorial
+        return valid, lag_safe, inv_factorial
 
     @cached_property
     def _eye_n(self) -> JaxFloatArray:
         """Cached ``np.eye(n)`` for the Kronecker product."""
-        return jnp.eye(self.n, dtype=FDTYPE)
+        return jnp.eye(self.n)
 
     @property
     def A(self) -> JaxFloatArray:
         """Just identity matrix."""
-        return jnp.eye(self.state_dim, k=self.n, dtype=self.dtype)
+        return jnp.eye(self.state_dim, k=self.n)
 
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete-time transition matrix $\\Phi(\\Delta t)$.
@@ -115,7 +114,7 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         Returns:
             Array of shape ``(*dt.shape, state_dim, state_dim)``.
         """
-        dt_arr = jnp.asarray(dt, dtype=FDTYPE)
+        dt_arr = jnp.asarray(dt)
         valid, exponent, inv_factorial = self._temporal_factors
 
         # Temporal matrix: T[..., i, j] = dt^(j-i) / (j-i)! for j >= i.

@@ -5,6 +5,7 @@ solutions and verifies that both the conditional-based and classical Kalman
 gain implementations produce identical results.
 """
 
+import numpy as np
 import pytest
 from jax import numpy as jnp
 from numpy.testing import assert_allclose
@@ -48,16 +49,23 @@ class IdentityMeasurement(LinearTransformBase):
     def transform(self, x: GaussianRV) -> GaussianRV:
         return x
 
+    def transform_array(self, x):
+        """Transform an array."""
+        return x
+
+    def transform_covariance(self, cov):
+        return cov
+
 
 class ConstantVelocityTransition(LinearTransitionBase):
     """2D constant velocity model: [position, velocity]"""
 
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
-        A = jnp.zeros(dt.shape + (2, 2))
+        A = np.zeros(dt.shape + (2, 2))
         A[..., 0, 0] = 1.0
         A[..., 0, 1] = dt
         A[..., 1, 1] = 1.0
-        return A
+        return jnp.array(A)
 
     def inverse(self, dt: JaxFloatArray) -> JaxFloatArray:
         return jnp.linalg.inv(self.matrix(dt))
@@ -100,13 +108,13 @@ class TestKalmanFilter1D:
     def simple_filter(self):
         """1D filter with identity transition and measurement"""
         transition = IdentityTransition()
-        process_noise = SimpleProcessNoise(np.array([[0.1**2]]))
+        process_noise = SimpleProcessNoise(jnp.array([[0.1**2]]))
         measurement = IdentityMeasurement()
         return LinearGaussianKalman(transition, process_noise, measurement)
 
     def test_predict_identity(self, simple_filter):
         """Test prediction with identity transition"""
-        state = GaussianRV(np.array([1.0]), jnp.array([[1.0]]))
+        state = GaussianRV(jnp.array([1.0]), jnp.array([[1.0]]))
         dt = jnp.array(1.0)
 
         predicted = simple_filter.predict(state, dt)
@@ -118,9 +126,9 @@ class TestKalmanFilter1D:
     def test_update_analytical_solution(self, simple_filter):
         """Test update against known analytical solution"""
         # Prior: x ~ N(1, 2)
-        state = GaussianRV(np.array([1.0]), jnp.array([[2.0]]))
+        state = GaussianRV(jnp.array([1.0]), jnp.array([[2.0]]))
         # Measurement: z ~ N(3, 1)
-        measurement = GaussianRV(np.array([3.0]), jnp.array([[1.0]]))
+        measurement = GaussianRV(jnp.array([3.0]), jnp.array([[1.0]]))
 
         # Analytical solution for x|z:
         # K = P @ H.T @ (H @ P @ H.T + R)^-1 = 2 * 1 * (2 + 1)^-1 = 2/3
@@ -139,13 +147,13 @@ class TestKalmanFilter1D:
 
     def test_multiple_updates_sequence(self, simple_filter):
         """Test a sequence of predict-update cycles"""
-        state = GaussianRV(np.array([0.0]), jnp.array([[10.0]]))
+        state = GaussianRV(jnp.array([0.0]), jnp.array([[10.0]]))
         dt = jnp.array(1.0)
 
         measurements = [
-            GaussianRV(np.array([1.0]), jnp.array([[0.5]])),  # Reduced measurement noise
-            GaussianRV(np.array([2.0]), jnp.array([[0.5]])),
-            GaussianRV(np.array([3.0]), jnp.array([[0.5]])),
+            GaussianRV(jnp.array([1.0]), jnp.array([[0.5]])),  # Reduced measurement noise
+            GaussianRV(jnp.array([2.0]), jnp.array([[0.5]])),
+            GaussianRV(jnp.array([3.0]), jnp.array([[0.5]])),
         ]
 
         for meas in measurements:
@@ -187,7 +195,7 @@ class TestKalmanFilter2D:
     def test_predict_constant_velocity(self, cv_filter):
         """Test prediction for constant velocity model"""
         # State: [position=0, velocity=1]
-        state = GaussianRV(np.array([0.0, 1.0]), jnp.array([[1.0, 0.0], [0.0, 0.1]]))
+        state = GaussianRV(jnp.array([0.0, 1.0]), jnp.array([[1.0, 0.0], [0.0, 0.1]]))
         dt = jnp.array(1.0)
 
         predicted = cv_filter.predict(state, dt)
@@ -219,9 +227,7 @@ class TestKalmanFilter2D:
             true_position = true_velocity * t
 
             # Noisy measurement
-            meas = GaussianRV(
-                jnp.array([true_position]), jnp.array([[measurement_noise**2]])
-            )
+            meas = GaussianRV(jnp.array([true_position]), jnp.array([[measurement_noise**2]]))
 
             # Update
             state = cv_filter.update(state, meas)
@@ -254,14 +260,12 @@ class TestCovarianceTypes:
         if request.param == "array":
             process_cov = jnp.array([[0.1**2]])
         elif request.param == "cholesky":
-            process_cov = cholesky_factor(np.array([[0.1**2]]))
+            process_cov = cholesky_factor(jnp.array([[0.1**2]]))
         else:  # diagonal
-            process_cov = DiagonalCovariance(np.array([0.1]))
+            process_cov = DiagonalCovariance(jnp.array([0.1]))
 
         process_noise = SimpleProcessNoise(process_cov)
-        return LinearGaussianKalman(
-            transition, process_noise, measurement
-        ), request.param
+        return LinearGaussianKalman(transition, process_noise, measurement), request.param
 
     def test_update_with_different_cov_types(self, filter_with_cov_type):
         """Test that filter works with different covariance types"""
@@ -271,12 +275,12 @@ class TestCovarianceTypes:
         if cov_type == "array":
             state_cov = jnp.array([[2.0]])
         elif cov_type == "cholesky":
-            state_cov = cholesky_factor(np.array([[2.0]]))
+            state_cov = cholesky_factor(jnp.array([[2.0]]))
         else:  # diagonal
-            state_cov = DiagonalCovariance(np.array([np.sqrt(2.0)]))
+            state_cov = DiagonalCovariance(jnp.array([np.sqrt(2.0)]))
 
-        state = GaussianRV(np.array([1.0]), state_cov)
-        measurement = GaussianRV(np.array([3.0]), jnp.array([[1.0]]))
+        state = GaussianRV(jnp.array([1.0]), state_cov)
+        measurement = GaussianRV(jnp.array([3.0]), jnp.array([[1.0]]))
 
         dt = jnp.array(1.0)
         predicted = kalman_filter.predict(state, dt)
@@ -294,20 +298,20 @@ class TestBatchProcessing:
     def simple_filter(self):
         """Simple 1D filter for batch testing"""
         transition = IdentityTransition()
-        process_noise = SimpleProcessNoise(np.array([[0.01]]))
+        process_noise = SimpleProcessNoise(jnp.array([[0.01]]))
         measurement = IdentityMeasurement()
         return LinearGaussianKalman(transition, process_noise, measurement)
 
     def test_sequential_processing(self, simple_filter):
         """Test processing multiple measurements sequentially"""
         # Process multiple measurements one at a time
-        state = GaussianRV(np.array([0.0]), jnp.array([[5.0]]))
+        state = GaussianRV(jnp.array([0.0]), jnp.array([[5.0]]))
         dt = jnp.array(1.0)
 
         measurements = [1.0, 2.0, 3.0]
         for meas_val in measurements:
             state = simple_filter.predict(state, dt)
-            meas = GaussianRV(np.array([meas_val]), jnp.array([[0.5]]))
+            meas = GaussianRV(jnp.array([meas_val]), jnp.array([[0.5]]))
             state = simple_filter.update(state, meas)
 
         # State should be close to the last measurement
@@ -321,13 +325,13 @@ class TestEdgeCases:
     def test_perfect_measurement(self):
         """Test update with zero measurement noise (perfect measurement)"""
         transition = IdentityTransition()
-        process_noise = SimpleProcessNoise(np.array([[0.1**2]]))
+        process_noise = SimpleProcessNoise(jnp.array([[0.1**2]]))
         measurement = IdentityMeasurement()
         kalman_filter = LinearGaussianKalman(transition, process_noise, measurement)
 
-        state = GaussianRV(np.array([1.0]), jnp.array([[10.0]]))
+        state = GaussianRV(jnp.array([1.0]), jnp.array([[10.0]]))
         # Perfect measurement (zero noise)
-        meas = GaussianRV(np.array([5.0]), jnp.array([[1e-10]]))
+        meas = GaussianRV(jnp.array([5.0]), jnp.array([[1e-10]]))
 
         updated = kalman_filter.update(state, meas)
 
@@ -337,13 +341,13 @@ class TestEdgeCases:
     def test_very_uncertain_measurement(self):
         """Test update with very high measurement noise"""
         transition = IdentityTransition()
-        process_noise = SimpleProcessNoise(np.array([[0.1**2]]))
+        process_noise = SimpleProcessNoise(jnp.array([[0.1**2]]))
         measurement = IdentityMeasurement()
         kalman_filter = LinearGaussianKalman(transition, process_noise, measurement)
 
-        state = GaussianRV(np.array([1.0]), jnp.array([[1.0]]))
+        state = GaussianRV(jnp.array([1.0]), jnp.array([[1.0]]))
         # Very noisy measurement
-        meas = GaussianRV(np.array([100.0]), jnp.array([[1000.0]]))
+        meas = GaussianRV(jnp.array([100.0]), jnp.array([[1000.0]]))
 
         updated = kalman_filter.update(state, meas)
 

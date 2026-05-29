@@ -52,7 +52,7 @@ module = "scipy.*"
 ignore_missing_imports = true
 
 [tool.ruff]
-line-length= 88
+line-length= 100
 src = ["src"]
 
 [tool.ruff.lint]
@@ -73,3 +73,8 @@ ignore = [
     "FBT001", #dumb rule 
     "FBT002", #dumb rule 
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ALL"]
+"src/sandbox/**/*.py" = ["ALL"]
+"examples/**/" = ["ALL"]

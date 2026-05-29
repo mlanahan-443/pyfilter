@@ -1,5 +1,6 @@
 """Test utility functions."""
 
+import numpy as np
 import pytest
 from jax import numpy as jnp
 
@@ -17,8 +18,8 @@ class TestLeftBroadcast:
 
         bx, by = left_broadcast_arrays(x, y)
 
-        jnp.testing.assert_equal(bx.shape, (100, 10, 40))
-        jnp.testing.assert_equal(by.shape, (100, 10, 40))
+        np.testing.assert_equal(bx.shape, (100, 10, 40))
+        np.testing.assert_equal(by.shape, (100, 10, 40))
 
     def test_deep_extension(self):
         """Test extending multiple dimensions deep."""
@@ -28,8 +29,8 @@ class TestLeftBroadcast:
 
         bx, by = left_broadcast_arrays(x, y)
 
-        jnp.testing.assert_equal(bx.shape, (100, 10, 40, 20, 30))
-        jnp.testing.assert_equal(by.shape, (100, 10, 40, 20, 30))
+        np.testing.assert_equal(bx.shape, (100, 10, 40, 20, 30))
+        np.testing.assert_equal(by.shape, (100, 10, 40, 20, 30))
 
     def test_interleaved_broadcasting(self):
         """
@@ -44,8 +45,8 @@ class TestLeftBroadcast:
 
         bx, by = left_broadcast_arrays(x, y)
 
-        jnp.testing.assert_equal(bx.shape, (100, 10, 40))
-        jnp.testing.assert_equal(by.shape, (100, 10, 40))
+        np.testing.assert_equal(bx.shape, (100, 10, 40))
+        np.testing.assert_equal(by.shape, (100, 10, 40))
 
     def test_scalar_broadcasting(self):
         """Scalars should work against any array."""
@@ -54,7 +55,7 @@ class TestLeftBroadcast:
 
         bx, by = left_broadcast_arrays(x, y)
 
-        jnp.testing.assert_equal(bx.shape, (10, 20))
+        np.testing.assert_equal(bx.shape, (10, 20))
         # Ensure values broadcasted correctly
         assert jnp.all(bx == 5.0)
 

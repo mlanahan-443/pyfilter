@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from jax import numpy as jnp
-from jax.typing import ArrayLike, DTypeLike
+from jax.typing import ArrayLike
 
-from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types import Covariance, RandomVariable
 
 
-@dataclass(frozen=True)
 class LinearTransformBase[State: RandomVariable](ABC):
-    dtype: DTypeLike = FDTYPE
-
     @property
     @abstractmethod
     def matrix(self) -> JaxFloatArray:
@@ -40,7 +35,6 @@ class LinearTransformBase[State: RandomVariable](ABC):
 class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
     def __init__(self, A: JaxFloatArray):
         self._A = A
-        self.__setattr__("dtype", self._A.dtype)
 
     @property
     def matrix(self) -> JaxFloatArray:
@@ -52,22 +46,16 @@ class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
     def transform_array[arrT: ArrayLike](self, x: arrT) -> arrT:
         return self._A @ x
 
-    @abstractmethod
     def transform_covariance[covT: Covariance](self, cov: covT) -> covT:
         """Transform a covariance."""
         if isinstance(cov, jnp.ndarray):
-            return jnp.einsum(
-                "...ij,...jk,...lk->...il", self._A, cov, self._A, optimize=True
-            )
+            return jnp.einsum("...ij,...jk,...lk->...il", self._A, cov, self._A, optimize=True)
 
         return cov.quadratic_form(self._A)
 
 
-@dataclass(frozen=True)
 class LinearTransitionBase[State: RandomVariable](ABC):
     """Base linear transition."""
-
-    dtype: DTypeLike = FDTYPE
 
     @abstractmethod
     def transform(self, x: State, dt: JaxFloatArray) -> State:
@@ -97,7 +85,6 @@ class HasInverseTransform[State: RandomVariable](Protocol):
 
 class LTI_Transition[State: RandomVariable](LinearTransitionBase[State]):
     def __init__(self, A: JaxFloatArray) -> None:
-        super().__init__(dtype=A.dtype)
         self._A = A
 
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:

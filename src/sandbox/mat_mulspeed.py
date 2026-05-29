@@ -16,9 +16,7 @@ def main():
     batch_dims = 10 ** np.arange(1, 8, dtype=int)
     for n in batch_dims:
         comp_time = batched_matmul(n, 9)
-        print(
-            f"n = {n}, time = {comp_time} [s], processing rate = {n * 1e3 / comp_time} [kHz]"
-        )
+        print(f"n = {n}, time = {comp_time} [s], processing rate = {n * 1e3 / comp_time} [kHz]")
 
 
 if __name__ == "__main__":

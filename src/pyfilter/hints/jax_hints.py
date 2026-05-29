@@ -3,9 +3,9 @@ from types import EllipsisType
 from jax import numpy as jnp
 from jaxtyping import Array, Bool, Float, Integer
 
-type JaxFloatArray = Float[Array,"..."]
-type JaxBoolArray  = Bool[Array,  "..."]
-type JaxIntArray   = Integer[Array, "..."]
+type JaxFloatArray = Float[Array, "..."]
+type JaxBoolArray = Bool[Array, "..."]
+type JaxIntArray = Integer[Array, "..."]
 
 type IndexItem = (
     int  # Standard integer

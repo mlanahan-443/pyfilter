@@ -31,8 +31,7 @@ def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
     # Check for too many Ellipses (NumPy only allows one)
     if (
         isinstance(array_index, (tuple, list))
-        and sum([0 if isinstance(item, EllipsisType) else 1 for item in array_index])
-        > 1
+        and sum([0 if isinstance(item, EllipsisType) else 1 for item in array_index]) > 1
     ):
         raise IndexError("an index can only have a single Ellipsis (...)")
 

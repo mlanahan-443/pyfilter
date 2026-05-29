@@ -14,7 +14,6 @@ from pyfilter.hints.jax_hints import ArrayIndex, IndexItem, JaxFloatArray
 from ..config import CHOLESKY_CHECK_FINITE_
 from ..util import (
     _IndexerMethod,
-    implements_ufunc,
     left_broadcast_arrays,
     normalize_index,
 )
@@ -291,9 +290,7 @@ class CovarianceBase(ABC):
 def cholesky_factor(A: JaxFloatArray) -> CholeskyFactorCovariance:
     """Light wrapper around cho_factor to improve code readability"""
 
-    L = cho_factor(
-        A, lower=True, overwrite_a=True, check_finite=CHOLESKY_CHECK_FINITE_
-    )[0]
+    L = cho_factor(A, lower=True, overwrite_a=True, check_finite=CHOLESKY_CHECK_FINITE_)[0]
     return CholeskyFactorCovariance(jnp.tril(L))
 
 
@@ -303,9 +300,7 @@ class CholeskyFactorCovariance(CovarianceBase):
 
     def __init__(self, L: JaxFloatArray):
         if L.ndim < 2:
-            raise ValueError(
-                "Matrix must be at least 2-D to specify a valid covariance."
-            )
+            raise ValueError("Matrix must be at least 2-D to specify a valid covariance.")
 
         if L.shape[-1] != L.shape[-2]:
             raise ValueError("Last two dimensions must specify a square matrix.")
@@ -362,8 +357,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         return cholesky_factor(
-            self.full()
-            + (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
+            self.full() + (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
         )
 
     def _sub_covariance(
@@ -374,8 +368,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         return cholesky_factor(
-            self.full()
-            - (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
+            self.full() - (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
         )
 
     def _add_to_diagonal(self, other: DiagonalCovariance) -> CholeskyFactorCovariance:
@@ -391,7 +384,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         """
 
         mat = self.full()
-        mat[..., *self.diagonal_indices] += other.variance
+        mat = mat.at[..., *self.diagonal_indices].add(other.variance)
         return cholesky_factor(mat)
 
     def _sub_diagonal(self, other: DiagonalCovariance) -> CholeskyFactorCovariance:
@@ -407,7 +400,7 @@ class CholeskyFactorCovariance(CovarianceBase):
         """
 
         mat = self.full()
-        mat[..., *self.diagonal_indices] -= other.variance
+        mat = mat.at[..., *self.diagonal_indices].subtract(other.variance)
         return cholesky_factor(mat)
 
     @overload
@@ -549,10 +542,10 @@ class CholeskyFactorCovariance(CovarianceBase):
         self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
     ) -> CholeskyFactorCovariance:
         L_view = self._L[batch_idx]
-        return CholeskyFactorCovariance(L_view[..., *matrix_idx], copy=False)
+        return CholeskyFactorCovariance(L_view[..., *matrix_idx])
 
     def _apply_biloc_indexing(self, index: ArrayIndex) -> CholeskyFactorCovariance:
-        return CholeskyFactorCovariance(self._L[index], copy=False)
+        return CholeskyFactorCovariance(self._L[index])
 
     def _apply_at_indexing(self, index: ArrayIndex) -> CholeskyFactorCovariance:
         new_P = self.full()[index]
@@ -565,7 +558,6 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         return cholesky_factor(new_P)
 
-    @implements_ufunc(jnp.broadcast_to, CHOL_UFUNC_CACHE_)
     def broadcast_to(
         self, shape: tuple[int, ...], out_sharding: NamedSharding | None = None
     ) -> CholeskyFactorCovariance:
@@ -576,13 +568,11 @@ class CholeskyFactorCovariance(CovarianceBase):
                 f"Cannot broadcast the matrix shape of DiagonalCovariance: {self.matrix_shape} to the new matrix shape: {matrix_shape})"
             )
         return CholeskyFactorCovariance(
-            jnp.broadcast_to(self._L, batch_shape + matrix_shape, out_sharding= out_sharding)
+            jnp.broadcast_to(self._L, batch_shape + matrix_shape, out_sharding=out_sharding)
         )
 
     def inverse(self) -> JaxFloatArray:
-        identity = jnp.broadcast_to(
-            jnp.eye(*self.matrix_shape, dtype=self._L.dtype), self.shape
-        )
+        identity = jnp.broadcast_to(jnp.eye(*self.matrix_shape, dtype=self._L.dtype), self.shape)
         return solve_cholesky_covariance(self, identity)
 
     @classmethod
@@ -606,9 +596,7 @@ class DiagonalCovariance(CovarianceBase):
 
     def __init__(self, D: JaxFloatArray):
         if D.ndim < 1:
-            raise ValueError(
-                "Matrix must be at least 1-D to specify a valid diagonal covariance."
-            )
+            raise ValueError("Matrix must be at least 1-D to specify a valid diagonal covariance.")
 
         super().__init__((D.shape[-1], D.shape[-1]))
         self._D = D
@@ -645,10 +633,7 @@ class DiagonalCovariance(CovarianceBase):
         Returns:
             JaxFloatArray: The full matrix.
         """
-
-        out = jnp.zeros(self.shape, dtype=self._D.dtype)
-        out[..., *self.diagonal_indices] = self.variance
-        return out
+        return jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(self.variance)
 
     @property
     def cholesky_factor(self) -> JaxFloatArray:
@@ -657,9 +642,7 @@ class DiagonalCovariance(CovarianceBase):
         Returns:
             JaxFloatArray: The cholesky factor.
         """
-        out = jnp.zeros(self.shape, dtype=self._D.dtype)
-        out[..., *self.diagonal_indices] = self._D
-        return out
+        return jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(self._D)
 
     def quadratic_form(self, other: JaxFloatArray) -> CholeskyFactorCovariance:
         """Computes the quadratic product A @ D^2 @ A.T.
@@ -680,12 +663,8 @@ class DiagonalCovariance(CovarianceBase):
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
-        mat = (
-            other.full()
-            if isinstance(other, CholeskyFactorCovariance)
-            else other.copy()
-        )
-        mat[..., *self.diagonal_indices] += self.variance
+        mat = other.full() if isinstance(other, CholeskyFactorCovariance) else other.copy()
+        mat = mat.at[..., *self.diagonal_indices].add(self.variance)
         return cholesky_factor(mat)
 
     def _sub_covariance(
@@ -696,11 +675,7 @@ class DiagonalCovariance(CovarianceBase):
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         # Compute self - other where self is diagonal
-        other_mat = (
-            other.full()
-            if isinstance(other, CholeskyFactorCovariance)
-            else other.copy()
-        )
+        other_mat = other.full() if isinstance(other, CholeskyFactorCovariance) else other.copy()
         mat = self.full() - other_mat
         return cholesky_factor(mat)
 
@@ -742,13 +717,9 @@ class DiagonalCovariance(CovarianceBase):
     def __add__(self, other: JaxFloatArray) -> CholeskyFactorCovariance: ...
 
     @overload
-    def __add__(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance | DiagonalCovariance: ...
+    def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance: ...
 
-    def __add__(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Add covariance with another covariance object.
 
         I believe the fastest way to compute this is just computing
@@ -772,13 +743,9 @@ class DiagonalCovariance(CovarianceBase):
     def __radd__(self, other: JaxFloatArray) -> CholeskyFactorCovariance: ...
 
     @overload
-    def __radd__(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance | DiagonalCovariance: ...
+    def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance: ...
 
-    def __radd__(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Addition of is communative.
 
         Args:
@@ -790,9 +757,7 @@ class DiagonalCovariance(CovarianceBase):
 
         return self.__add__(other)
 
-    def __sub__(
-        self, other: CovarianceType
-    ) -> CholeskyFactorCovariance | DiagonalCovariance:
+    def __sub__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Subtract covariance from the current covariance object.
 
         I believe the fastest way to compute this is just computing
@@ -836,7 +801,7 @@ class DiagonalCovariance(CovarianceBase):
 
         full_index = batch_idx + (diag_idx,)
 
-        return DiagonalCovariance(self._D[full_index], copy=False)
+        return DiagonalCovariance(self._D[full_index])
 
     def _apply_at_indexing(self, index: ArrayIndex) -> DiagonalCovariance:
         """
@@ -863,9 +828,7 @@ class DiagonalCovariance(CovarianceBase):
             else:
                 diagonal_idx = matrix_col_idx
         else:
-            diag_idx_temp: Any = (
-                matrix_row_idx if matrix_row_idx != slice(None) else matrix_col_idx
-            )
+            diag_idx_temp: Any = matrix_row_idx if matrix_row_idx != slice(None) else matrix_col_idx
             diagonal_idx = diag_idx_temp
 
         batch_indexer = norm_index[:-2]
@@ -875,7 +838,7 @@ class DiagonalCovariance(CovarianceBase):
         if new_D.ndim == 0:
             raise IndexError("Indexing resulted in a scalar, invalid for Covariance.")
 
-        return DiagonalCovariance(new_D, copy=False)
+        return DiagonalCovariance(new_D)
 
     def _apply_biloc_indexing(self, index: ArrayIndex) -> DiagonalCovariance:
         """
@@ -885,11 +848,12 @@ class DiagonalCovariance(CovarianceBase):
         # Implementation depends on your specific definition of 'biloc'.
 
         new_D = self._D[index]  # Apply logic
-        return DiagonalCovariance(new_D, copy=False)
+        return DiagonalCovariance(new_D)
 
-    @implements_ufunc(np.broadcast_to, DIAG_UFUNC_CACHE_)
     def broadcast_to(
-        self, shape: tuple[int, ...], subok: bool = False
+        self,
+        shape: tuple[int, ...],
+        out_sharding: NamedSharding | None = None,
     ) -> DiagonalCovariance:
         norm_index = self._get_norm_index(shape)
 
@@ -907,19 +871,15 @@ class DiagonalCovariance(CovarianceBase):
         batch_shape = norm_index[:-2]
 
         return DiagonalCovariance(
-            jnp.broadcast_to(self._D, batch_shape + matrix_shape, subok=subok)
+            jnp.broadcast_to(self._D, batch_shape + matrix_shape, out_sharding=out_sharding)
         )
 
     def inverse(self) -> JaxFloatArray:
-        identity = jnp.broadcast_to(
-            jnp.eye(*self.matrix_shape, dtype=self._D.dtype), self.shape
-        )
+        identity = jnp.broadcast_to(jnp.eye(*self.matrix_shape, dtype=self._D.dtype), self.shape)
         return solve_diagonal_covariance(self, identity)
 
     @classmethod
-    def concatenate(
-        cls, other: Iterable[DiagonalCovariance], axis: int | tuple[int, ...] = 0
-    ) -> DiagonalCovariance:
+    def concatenate(cls, other: Iterable[DiagonalCovariance], axis: int = 0) -> DiagonalCovariance:
         """Method for concatenation."""
 
         D = jnp.concatenate([cov._D for cov in other], axis=axis)

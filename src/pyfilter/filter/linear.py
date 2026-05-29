@@ -11,7 +11,7 @@ from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types import Covariance, CovarianceBase
 from pyfilter.types.covariance import CholeskyFactorCovariance
 
-from ..hints import JaxFloatArray
+from ..hints.jax_hints import JaxFloatArray
 from ..types.process_noise import ProcessNoise
 from ..types.random_variables import GaussianRV
 
@@ -53,9 +53,7 @@ class BaseLinearGaussianKalmanFilter[
     ) -> GaussianRV[StateCovariance]:
         # The measurement prediction: z ~ N(H @ x_pred, S) where S = innovation.covariance
         # Since innovation.mean = z_obs - H @ x_pred, we have z_obs = innovation.mean + H @ x_pred
-        predicted_measurement_mean = self.measurement_model.transform_array(
-            state_prediction.mean
-        )
+        predicted_measurement_mean = self.measurement_model.transform_array(state_prediction.mean)
 
         # Create the predicted measurement distribution
         return GaussianRV(predicted_measurement_mean, innovation.covariance)
@@ -149,7 +147,7 @@ class SquareRootLinearGuassianKalman[
         HL = self.measurement_model.matrix @ L_pred  # (..., m, n)
         top = jnp.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
         bottom = jnp.concatenate(
-            [np.zeros((*L_pred.shape[:-2], n, m), dtype=L_pred.dtype), L_pred], axis=-1
+            [jnp.zeros((*L_pred.shape[:-2], n, m)), L_pred], axis=-1
         )  # (..., n, m+n)
         A = jnp.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
@@ -165,8 +163,6 @@ class SquareRootLinearGuassianKalman[
         K = jax.scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
 
         # mean update
-        posterior_mean = state_prediction.mean + jnp.einsum(
-            "...ij,...j->...i", K, innovation.mean
-        )
+        posterior_mean = state_prediction.mean + jnp.einsum("...ij,...j->...i", K, innovation.mean)
 
         return GaussianRV(posterior_mean, CholeskyFactorCovariance(L_post_T.mT))

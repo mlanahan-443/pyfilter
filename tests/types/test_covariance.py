@@ -1,5 +1,7 @@
 import re
 
+import jax
+import numpy as np
 import pytest
 from jax import numpy as jnp
 from jax.scipy.linalg import cho_factor
@@ -14,6 +16,7 @@ from pyfilter.types.covariance import (
     type_error_msg,
 )
 
+jax.config.update("jax_enable_x64", True)
 # --- Fixtures ---
 
 
@@ -54,7 +57,8 @@ def P_full(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     # Shape becomes (*batch_shape, dim, dim)
     full_shape = batch_shape + (dim, dim)
 
-    A = jnp.random.rand(*full_shape)
+    key = jax.random.key(44)
+    A = jax.random.uniform(key=key, shape=full_shape)
 
     # Make positive definite: A @ A.T + I
     # We use swapaxes to transpose only the last two dimensions for the batch
@@ -80,7 +84,7 @@ def chol_cov(L_factor: jnp.ndarray) -> CholeskyFactorCovariance:
 def diag_std(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns random standard deviations with correct batch shape."""
     # Shape becomes (*batch_shape, dim)
-    return jnp.random.rand(*(batch_shape + (dim,))) + 0.5
+    return jax.random.uniform(key=jax.random.key(44), shape=batch_shape + (dim,)) + 0.5
 
 
 @pytest.fixture
@@ -92,7 +96,7 @@ def diag_cov(diag_std: jnp.ndarray) -> DiagonalCovariance:
 def A_matrix(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns a random transformation matrix A."""
     # We make A batched as well to test full batch-on-batch operations
-    return jnp.random.rand(*(batch_shape + (dim, dim))) + 0.1
+    return jax.random.uniform(key=jax.random.key(55), shape=batch_shape + (dim, dim)) + 0.1
 
 
 # --- Test cholesky_factor Helper ---
@@ -128,7 +132,7 @@ def test_linear_cross_covariance(
     cross = linear_cross_covariance(cov, A_matrix)
     cross_check = P @ A_matrix.swapaxes(-1, -2)
 
-    jnp.testing.assert_allclose(
+    np.testing.assert_allclose(
         cross,
         cross_check,
         err_msg=f"Cross covariance not computed as intended for {cov_type}.",
@@ -139,12 +143,10 @@ def test_linear_cross_covariance(
 
 
 class TestCovarianceMethods:
-    def test_trace_cholesky_factor(
-        self, chol_cov: CholeskyFactorCovariance, P_full: jnp.ndarray
-    ):
+    def test_trace_cholesky_factor(self, chol_cov: CholeskyFactorCovariance, P_full: jnp.ndarray):
         """Test that the trace is computed correctly for the cholesky factor covariance."""
         expected_trace = jnp.trace(P_full, axis1=-2, axis2=-1)
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             expected_trace,
             chol_cov.trace(),
             err_msg="Trace in cholesky factor covariance not equal to trace in full matrix.",
@@ -153,7 +155,7 @@ class TestCovarianceMethods:
     def test_trace_diagonal(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray):
         """Test that the trace is computed correctly for the diagonal covariance."""
         expected_trace = jnp.sum(diag_std**2, axis=-1)
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             expected_trace,
             diag_cov.trace(),
             err_msg="Trace in diagonal factor covariance not equal to trace in full matrix.",
@@ -166,7 +168,7 @@ class TestCovarianceMethods:
 
         partial_full = partial_chol_cov.full()
         check_full = chol_cov.full()[..., 0:2, 0:2]
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             check_full,
             partial_full,
             err_msg="Slicing of cholesky factor covariance did not result in expected matrix.",
@@ -178,7 +180,7 @@ class TestCovarianceMethods:
         partial_diag_cov = diag_cov[..., 0:2, 0:2]
         partial_full = partial_diag_cov.full()
         check_full = diag_cov.full()[..., 0:2, 0:2]
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             check_full,
             partial_full,
             err_msg="Slicing of diagonal covariance did not result in expected matrix.",
@@ -191,7 +193,7 @@ class TestCovarianceMethods:
 
         partial_full = partial_chol_cov.full()
         check_full = chol_cov.full()[..., *index]
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             check_full,
             partial_full,
             err_msg="At Indexing of cholesky factor covariance did not result in expected matrix.",
@@ -204,7 +206,7 @@ class TestCovarianceMethods:
 
         partial_full = partial_diag.full()
         check_full = diag_cov.full()[..., *index]
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             check_full,
             partial_full,
             err_msg="At Indexing of diagonal covariance did not result in expected matrix.",
@@ -212,12 +214,16 @@ class TestCovarianceMethods:
 
     def test_biloc_index_cholesky_factor(self, chol_cov: CholeskyFactorCovariance):
         if chol_cov.ndim > 2:
-            bidx = (np.array([0]),) if chol_cov.ndim == 3 else jnp.ix_([0], [1, 2])
+            bidx = (
+                (jnp.array([0]),)
+                if chol_cov.ndim == 3
+                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
+            )
             partial_chol_cov = chol_cov.biloc[*bidx]
 
             partial_full = partial_chol_cov.full()
             check_full = chol_cov.full()[bidx]
-            jnp.testing.assert_allclose(
+            np.testing.assert_allclose(
                 check_full,
                 partial_full,
                 err_msg="Batch Indexing of cholesky factor covariance did not result in expected matrix.",
@@ -225,12 +231,16 @@ class TestCovarianceMethods:
 
     def test_biloc_index_diagonal(self, diag_cov: DiagonalCovariance):
         if diag_cov.ndim > 2:
-            bidx = (np.array([0]),) if diag_cov.ndim == 3 else jnp.ix_([0], [1, 2])
+            bidx = (
+                (jnp.array([0]),)
+                if diag_cov.ndim == 3
+                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
+            )
             partial_diag_cov = diag_cov.biloc[*bidx]
 
             partial_full = partial_diag_cov.full()
             check_full = diag_cov.full()[bidx]
-            jnp.testing.assert_allclose(
+            np.testing.assert_allclose(
                 check_full,
                 partial_full,
                 err_msg="Batch Indexing of cholesky factor covariance did not result in expected matrix.",
@@ -238,13 +248,13 @@ class TestCovarianceMethods:
 
     def test_diagonal_broadcast_to(self, diag_cov: DiagonalCovariance):
         bidx = (diag_cov.ndim**2,) + diag_cov.shape
-        broadcasted_diag_cov = jnp.broadcast_to(diag_cov, bidx)
+        broadcasted_diag_cov = diag_cov.broadcast_to(bidx)
 
         broadcasted_full = jnp.broadcast_to(diag_cov.full(), bidx)
 
         check_full = broadcasted_diag_cov.full()
 
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             broadcasted_full,
             check_full,
             err_msg="Broadcasting of diagonal covariance failed.",
@@ -252,13 +262,13 @@ class TestCovarianceMethods:
 
     def test_cholesky_broadcast_to(self, chol_cov: CholeskyFactorCovariance):
         bidx = (chol_cov.ndim**2,) + chol_cov.shape
-        broadcasted_chol_cov = jnp.broadcast_to(chol_cov, bidx)
+        broadcasted_chol_cov = chol_cov.broadcast_to(bidx)
 
         broadcasted_full = jnp.broadcast_to(chol_cov.full(), bidx)
 
         check_full = broadcasted_chol_cov.full()
 
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             broadcasted_full,
             check_full,
             err_msg="Broadcasting of cholesky factor covariance failed.",
@@ -284,10 +294,10 @@ class TestCholeskyFactorCovariance:
     def test_init_raises(self):
         """Tests that __init__ raises ValueErrors for bad shapes."""
         with pytest.raises(ValueError, match="at least 2-D"):
-            CholeskyFactorCovariance(np.array([1.0, 2.0]))
+            CholeskyFactorCovariance(jnp.array([1.0, 2.0]))
 
         with pytest.raises(ValueError, match="square matrix"):
-            CholeskyFactorCovariance(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
+            CholeskyFactorCovariance(jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
 
     def test_variance(self, chol_cov: CholeskyFactorCovariance, P_full: jnp.ndarray):
         """
@@ -302,7 +312,7 @@ class TestCholeskyFactorCovariance:
         # Create a second covariance
         P2 = P_full * 0.5 + 2.0 * jnp.eye(P_full.shape[-1])
         L2, _ = cho_factor(P2, lower=True)
-        chol_cov2 = CholeskyFactorCovariance(np.tril(L2))
+        chol_cov2 = CholeskyFactorCovariance(jnp.tril(L2))
 
         result = chol_cov + chol_cov2
         expected_P = P_full + P2
@@ -337,7 +347,7 @@ class TestCholeskyFactorCovariance:
         """Tests __sub__ with another CholeskyFactorCovariance."""
         P2 = P_full * 0.5  # P - 0.5*P = 0.5*P (still pos-def)
         L2, _ = cho_factor(P2, lower=True)
-        chol_cov2 = CholeskyFactorCovariance(np.tril(L2))
+        chol_cov2 = CholeskyFactorCovariance(jnp.tril(L2))
 
         result = chol_cov - chol_cov2
         expected_P = P_full - P2
@@ -411,7 +421,7 @@ class TestCholeskyFactorCovariance:
         inv = chol_cov.inverse()
         inv_check = jnp.linalg.inv(chol_cov.full())
 
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             inv_check,
             inv,
             err_msg="Inverse computation failed for CholeskyFactorCovariance",
@@ -435,7 +445,7 @@ class TestDiagonalCovariance:
         """Tests that __init__ raises ValueError for bad shapes."""
         with pytest.raises(ValueError, match="at least 1-D"):
             # A 0-D array (scalar)
-            DiagonalCovariance(np.array(1.0))
+            DiagonalCovariance(jnp.array(1.0))
 
     def test_variance(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray):
         """Tests the .variance property."""
@@ -444,21 +454,18 @@ class TestDiagonalCovariance:
 
     def test_full(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray):
         """Tests the .full() method."""
-        expected_P = jnp.zeros(diag_cov.shape)
-        expected_P[..., *np.diag_indices(diag_cov.matrix_shape[-1])] = diag_std**2
+        expected_P = jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(diag_std**2)
         assert_allclose(diag_cov.full(), expected_P)
 
     def test_cholesky_factor(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray):
         """Tests the .cholesky_factor property."""
-        expected_L = jnp.zeros(diag_cov.shape)
-        expected_L[..., *np.diag_indices(diag_cov.matrix_shape[-1])] = diag_std
+        expected_L = jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(diag_std)
         assert_allclose(diag_cov.cholesky_factor, expected_L)
 
-    def test_add_diag(
-        self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray, dim: int
-    ):
+    def test_add_diag(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray, dim: int):
         """Tests __add__ with another DiagonalCovariance."""
-        std_2 = jnp.random.rand(dim) + 0.5
+        key = jax.random.key(100)
+        std_2 = jax.random.uniform(key, shape=(dim,)) + 0.5
         cov_2 = DiagonalCovariance(std_2)
 
         result = diag_cov + cov_2
@@ -520,9 +527,7 @@ class TestDiagonalCovariance:
         """Tests subtraction of a CholeskyFactorCovariance from a DiagonalCovariance."""
         # This tests diag - chol
         # We need to make sure diag_cov is "bigger" than chol_cov
-        diag_cov_large = DiagonalCovariance(
-            jnp.diagonal(P_full, axis1=-2, axis2=-1) * 2 + 1**0.5
-        )
+        diag_cov_large = DiagonalCovariance(jnp.diagonal(P_full, axis1=-2, axis2=-1) * 2 + 1**0.5)
 
         result = diag_cov_large - chol_cov  # self - other
         expected_P = diag_cov_large.full() - P_full
@@ -575,6 +580,6 @@ class TestDiagonalCovariance:
         inv = diag_cov.inverse()
         inv_check = jnp.linalg.inv(diag_cov.full())
 
-        jnp.testing.assert_allclose(
+        np.testing.assert_allclose(
             inv_check, inv, err_msg="Inverse computation failed for DiagonalCovariance"
         )

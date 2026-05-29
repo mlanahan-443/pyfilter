@@ -1,5 +1,3 @@
 from ._profile import LineProfiler
 
-__all__ = [
-    "LineProfiler"
-]
+__all__ = ["LineProfiler"]

@@ -2,9 +2,8 @@ from typing import override
 
 import jax
 from jax import numpy as jnp
-from jax.typing import ArrayLike, DTypeLike
+from jax.typing import ArrayLike
 
-from pyfilter.config import FDTYPE_ as FDYTPE
 from pyfilter.hints.jax_hints import JaxFloatArray, JaxIntArray
 from pyfilter.types import Covariance, GaussianRV, RandomVariable
 
@@ -20,10 +19,7 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     component axis directly.
     """
 
-    def __init__(
-        self, indices: JaxIntArray | slice, input_dim: int, dtype: DTypeLike = FDYTPE
-    ) -> None:
-        super().__init__(dtype=dtype)
+    def __init__(self, indices: JaxIntArray | slice, input_dim: int) -> None:
         if input_dim <= 0:
             raise ValueError(f"input_dim must be positive, got {input_dim}")
         self._index_or_slice = indices
@@ -38,7 +34,7 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
                 self._index_or_slice.step,
             )
 
-        return jnp.asarray(self._index_or_slice).astype(jnp.int32)
+        return jnp.asarray(self._index_or_slice).astype(jnp.integer)
 
     @property
     def input_dim(self) -> int:
@@ -52,7 +48,7 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     @override
     def matrix(self) -> JaxFloatArray:
         """Form the selection matrix explicitly."""
-        return jax.nn.one_hot(self.indices,self ._input_dim, dtype = self.dtype)
+        return jax.nn.one_hot(self.indices, self._input_dim)
 
     @override
     def transform(self, x: State) -> State:

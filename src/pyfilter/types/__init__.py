@@ -1,6 +1,6 @@
 from typing import Any
 
-from ..hints import JaxFloatArray
+from ..hints.jax_hints import JaxFloatArray
 from .covariance import CovarianceBase
 from .random_variables import GaussianRV
 

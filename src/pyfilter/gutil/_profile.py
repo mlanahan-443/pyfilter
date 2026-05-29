@@ -26,16 +26,16 @@ import io
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import (
     Any,
-    ContextManager,
     Final,
     Literal,
     Self,
 )
 
+import numpy as np
 from numpy.typing import NDArray
 from rich.box import SIMPLE_HEAD
 from rich.console import Console, RenderableType
@@ -126,9 +126,7 @@ class TimingResult:
         if self.number < 1:
             raise ValueError(f"number must be >= 1, got {self.number}")
         if self.times.ndim != 1:
-            raise ValueError(
-                f"times must be 1-D; got shape {self.times.shape}"
-            )
+            raise ValueError(f"times must be 1-D; got shape {self.times.shape}")
 
     @property
     def n_repeats(self) -> int:
@@ -312,9 +310,7 @@ class ProfileReport(ProfileReportBase):
 
         if self.show_percentiles and result.n_repeats >= 4:
             qs = result.percentile(np.array([25.0, 75.0, 95.0]))
-            table.add_row(
-                "p25 / p75", f"{f(float(qs[0]))} / {f(float(qs[1]))}"
-            )
+            table.add_row("p25 / p75", f"{f(float(qs[0]))} / {f(float(qs[1]))}")
             table.add_row("p95", f(float(qs[2])))
 
         table.add_row("total wall", f(result.total))
@@ -375,9 +371,7 @@ class LineProfiler:
         timer: TimerFn = time.perf_counter,
     ) -> None:
         self._name = name
-        self._report: ProfileReportBase = (
-            report if report is not None else ProfileReport()
-        )
+        self._report: ProfileReportBase = report if report is not None else ProfileReport()
         self._timer = timer
         self._times: list[float] = []
         self._number: int = 1
@@ -400,7 +394,7 @@ class LineProfiler:
         """Immutable snapshot of currently-recorded measurements."""
         return TimingResult(
             name=self._name,
-            times=np.asarray(self._times, dtype=np.float64),
+            times=np.asarray(self._times),
             number=self._number,
         )
 
@@ -409,9 +403,7 @@ class LineProfiler:
 
     def start(self) -> None:
         if self._t0 is not None:
-            raise RuntimeError(
-                "LineProfiler.start(): a measurement is already in progress"
-            )
+            raise RuntimeError("LineProfiler.start(): a measurement is already in progress")
         self._number = 1
         self._t0 = self._timer()
 
@@ -469,7 +461,7 @@ class LineProfiler:
 
         timer = self._timer  # local binding -> fewer attribute lookups
 
-        def _gc_ctx() -> ContextManager[None]:
+        def _gc_ctx() -> AbstractContextManager[None]:
             # @contextmanager generators are single-use, so we build a
             # fresh one per measurement.
             return _gc_disabled() if disable_gc else nullcontext()

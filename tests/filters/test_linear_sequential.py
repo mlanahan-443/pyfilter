@@ -34,7 +34,7 @@ class TransitionModel(LinearTransitionBase):
 
 class MeasurementModel(LinearTransformBase):
     def transform(self, x: GaussianRV) -> GaussianRV:
-        return x.marginal(np.array([0, 3]))
+        return x.marginal(jnp.array([0, 3]))
 
     @property
     def matrix(self) -> JaxFloatArray:
@@ -125,11 +125,9 @@ def test_linear_filter(
 
     measurements = GaussianRV(
         measurement_means,
-        jnp.repeat(
-            measurement_covariance[np.newaxis, ...], len(measurement_means), axis=0
-        ),
+        jnp.repeat(measurement_covariance[np.newaxis, ...], len(measurement_means), axis=0),
     )
-    state = GaussianRV(np.zeros(6), jnp.diag(np.ones(6)) * 500)
+    state = GaussianRV(jnp.zeros(6), jnp.diag(jnp.ones(6)) * 500)
 
     for i in range(len(measurements)):
         prediction = linear_filter.predict(state, dt)
@@ -138,4 +136,4 @@ def test_linear_filter(
 
     # Verify the filter converged to a reasonable estimate
     assert state.mean.shape == (6,)
-    assert jnp.all(np.isfinite(state.mean))
+    assert jnp.all(jnp.isfinite(state.mean))

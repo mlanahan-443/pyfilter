@@ -1,6 +1,6 @@
+import jax
 import pytest
 from jax import numpy as jnp
-from numpy.random import default_rng
 
 from pyfilter.filter.linear import (
     LinearGaussianKalman,
@@ -42,7 +42,7 @@ def batch_shape(ndim: int) -> tuple[int, ...]:
 def P_full1(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     full_shape = batch_shape + (dim, dim)
 
-    A = jnp.random.rand(*full_shape)
+    A = jax.random.uniform(key=jax.random.key(22), shape=full_shape)
     A_T = jnp.swapaxes(A, -1, -2)
     P = A @ A_T + dim * jnp.eye(dim)
     return P
@@ -53,7 +53,7 @@ def P_full2(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns random, positive-definite matrices with correct batch shape."""
     full_shape = batch_shape + (dim, dim)
 
-    A = jnp.random.rand(*full_shape)
+    A = jax.random.uniform(key=jax.random.key(2), shape=full_shape)
     A_T = jnp.swapaxes(A, -1, -2)
     P = A @ A_T + dim * jnp.eye(dim)
     return P
@@ -85,14 +85,14 @@ def chol_cov2(L_factor2: jnp.ndarray) -> CholeskyFactorCovariance:
 def A1(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns a random transformation matrix A."""
     # We make A batched as well to test full batch-on-batch operations
-    return jnp.random.rand(*(batch_shape + (dim, dim))) + 0.1
+    return jax.random.uniform(key=jax.random.key(31), shape=batch_shape + (dim, dim)) + 0.1
 
 
 @pytest.fixture
 def A2(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns a random transformation matrix A."""
     # We make A batched as well to test full batch-on-batch operations
-    return jnp.random.rand(*(batch_shape + (dim, dim))) + 0.1
+    return jax.random.uniform(key=jax.random.key(402), shape=batch_shape + (dim, dim)) + 0.1
 
 
 class SimpleProcessNoise(ProcessNoise):
@@ -100,8 +100,7 @@ class SimpleProcessNoise(ProcessNoise):
 
     def __init__(self, shape: tuple):
         super().__init__(shape)
-        self._cov = jnp.zeros(shape)
-        jnp.fill_diagonal(self._cov, 1e-2)
+        self._cov = jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(jnp.ones(shape) * 1e-2)
 
     def covariance(self, dt: JaxFloatArray) -> GaussianRV:
         return GaussianRV.zero_mean(self._cov)
@@ -122,28 +121,23 @@ def test_linear_gaussian_kalman_basic():
     process_noise = SimpleProcessNoise((4, 4))
 
     # Measurement model: observe first 2 components
-    H = jnp.zeros((2, 4))
-    H[0, 0] = 1
-    H[1, 1] = 1
+    H = jax.nn.one_hot(jnp.array([0, 1]), 4)
     measurement_model = GenericLinearTransform(H)
 
     # Create filter
-    kalman_filter = LinearGaussianKalman(
-        transition_model, process_noise, measurement_model
-    )
+    kalman_filter = LinearGaussianKalman(transition_model, process_noise, measurement_model)
 
     # Generate random measurements
-    generator = default_rng(seed=42)
     num_steps = 10
     dt = jnp.array(0.1)
-
+    key = jax.random.key(33235235)
     state = init_state
     for _i in range(num_steps):
         # Predict
         prediction = kalman_filter.predict(state, dt)
 
         # Generate measurement
-        meas_val = generator.random(2)
+        meas_val = jax.random.uniform(jax.random.split(key)[1], shape=(2,))
         meas_cov = jnp.eye(2) * 0.1
         measurement = GaussianRV(meas_val, meas_cov)
 
@@ -153,7 +147,7 @@ def test_linear_gaussian_kalman_basic():
         # Verify state is valid
         assert state.mean.shape == (4,)
         assert state.covariance.shape == (4, 4)
-        assert jnp.all(np.isfinite(state.mean))
+        assert jnp.all(jnp.isfinite(state.mean))
 
 
 def test_lti_transition():
@@ -166,7 +160,7 @@ def test_lti_transition():
     assert jnp.allclose(transition.matrix(dt), A)
 
     # Test transform method
-    state = GaussianRV(np.array([1.0, 2.0]), jnp.eye(2))
+    state = GaussianRV(jnp.array([1.0, 2.0]), jnp.eye(2))
     transformed = transition.transform(state, dt)
 
     expected_mean = A @ state.mean
@@ -186,7 +180,7 @@ def test_generic_linear_transform():
     assert jnp.allclose(transform.matrix, H)
 
     # Test transform method
-    state = GaussianRV(np.array([2.0, 3.0]), jnp.eye(2) * 0.5)
+    state = GaussianRV(jnp.array([2.0, 3.0]), jnp.eye(2) * 0.5)
     transformed = transform.transform(state)
 
     expected_mean = H @ state.mean
@@ -231,7 +225,7 @@ def test_square_root_kalman_basic():
 
         # Generate measurement
         meas_val = generator.random(2)
-        meas_cov = DiagonalCovariance(np.ones(2) * 0.1)
+        meas_cov = DiagonalCovariance(jnp.ones(2) * 0.1)
         measurement = GaussianRV(meas_val, meas_cov)
 
         # Update directly from measurement
@@ -241,8 +235,8 @@ def test_square_root_kalman_basic():
         assert state.mean.shape == (4,)
         assert isinstance(state.covariance, CholeskyFactorCovariance)
         assert state.covariance.cholesky_factor.shape == (4, 4)
-        assert jnp.all(np.isfinite(state.mean))
-        assert jnp.all(np.isfinite(state.covariance.cholesky_factor))
+        assert jnp.all(jnp.isfinite(state.mean))
+        assert jnp.all(jnp.isfinite(state.covariance.cholesky_factor))
 
 
 def test_square_root_kalman_vs_standard():
@@ -276,12 +270,8 @@ def test_square_root_kalman_vs_standard():
     measurement_model = GenericLinearTransform(H)
 
     # Create both filters
-    standard_filter = LinearGaussianKalman(
-        transition_model, process_noise, measurement_model
-    )
-    sq_filter = SquareRootLinearGuassianKalman(
-        transition_model, process_noise, measurement_model
-    )
+    standard_filter = LinearGaussianKalman(transition_model, process_noise, measurement_model)
+    sq_filter = SquareRootLinearGuassianKalman(transition_model, process_noise, measurement_model)
 
     # Run both filters
     generator = default_rng(seed=123)
@@ -294,14 +284,12 @@ def test_square_root_kalman_vs_standard():
         pred_sq = sq_filter.predict(state_sq, dt)
 
         # Verify predictions match
-        jnp.testing.assert_allclose(pred_standard.mean, pred_sq.mean, rtol=1e-10)
-        jnp.testing.assert_allclose(
-            pred_standard.covariance, pred_sq.covariance.full(), rtol=1e-10
-        )
+        np.testing.assert_allclose(pred_standard.mean, pred_sq.mean, rtol=1e-10)
+        np.testing.assert_allclose(pred_standard.covariance, pred_sq.covariance.full(), rtol=1e-10)
 
         # Generate measurement
         meas_val = generator.random(4)
-        meas_cov = DiagonalCovariance(np.ones(4) * 0.2)
+        meas_cov = DiagonalCovariance(jnp.ones(4) * 0.2)
         measurement_standard = GaussianRV(meas_val.copy(), meas_cov.copy())
         measurement_sq = GaussianRV(meas_val.copy(), meas_cov.copy())
 
@@ -310,10 +298,8 @@ def test_square_root_kalman_vs_standard():
         state_sq = sq_filter.update(pred_sq, measurement_sq)
 
         # Verify updates match
-        jnp.testing.assert_allclose(state_standard.mean, state_sq.mean, rtol=1e-8)
-        jnp.testing.assert_allclose(
-            state_standard.covariance, state_sq.covariance.full(), rtol=1e-8
-        )
+        np.testing.assert_allclose(state_standard.mean, state_sq.mean, rtol=1e-8)
+        np.testing.assert_allclose(state_standard.covariance, state_sq.covariance.full(), rtol=1e-8)
 
 
 def test_square_root_kalman_innovation():
@@ -324,7 +310,7 @@ def test_square_root_kalman_innovation():
     init_state = GaussianRV(init_mean, CholeskyFactorCovariance(init_L))
 
     # Simple transition (identity)
-    transition_model = LTI_Transition(np.eye(2))
+    transition_model = LTI_Transition(jnp.eye(2))
     process_noise = SimpleProcessNoise((2, 2))
 
     # Measurement model
@@ -332,9 +318,7 @@ def test_square_root_kalman_innovation():
     measurement_model = GenericLinearTransform(H)
 
     # Create filter
-    sq_filter = SquareRootLinearGuassianKalman(
-        transition_model, process_noise, measurement_model
-    )
+    sq_filter = SquareRootLinearGuassianKalman(transition_model, process_noise, measurement_model)
 
     # Predict
     dt = jnp.array(0.1)
@@ -342,7 +326,7 @@ def test_square_root_kalman_innovation():
 
     # Create measurement
     meas_val = jnp.array([1.5, 2.5])
-    meas_cov = DiagonalCovariance(np.ones(2) * 0.1)
+    meas_cov = DiagonalCovariance(jnp.ones(2) * 0.1)
     measurement = GaussianRV(meas_val, meas_cov)
 
     # Compute innovation
@@ -351,7 +335,7 @@ def test_square_root_kalman_innovation():
     # Expected innovation mean: z - H @ x_pred
     expected_innov_mean = meas_val - H @ prediction.mean
 
-    jnp.testing.assert_allclose(innovation.mean, expected_innov_mean)
+    np.testing.assert_allclose(innovation.mean, expected_innov_mean)
     assert innovation.covariance.shape == (2, 2)
 
 
@@ -373,12 +357,8 @@ def test_innovation_consistency():
     measurement_model = GenericLinearTransform(H)
 
     # Create filters
-    standard_filter = LinearGaussianKalman(
-        transition_model, process_noise, measurement_model
-    )
-    sq_filter = SquareRootLinearGuassianKalman(
-        transition_model, process_noise, measurement_model
-    )
+    standard_filter = LinearGaussianKalman(transition_model, process_noise, measurement_model)
+    sq_filter = SquareRootLinearGuassianKalman(transition_model, process_noise, measurement_model)
 
     # Predict
     dt = jnp.array(0.1)
@@ -387,7 +367,7 @@ def test_innovation_consistency():
 
     # Measurement
     meas_val = jnp.array([1.2, 2.3])
-    meas_cov = DiagonalCovariance(np.ones(2) * 0.15)
+    meas_cov = DiagonalCovariance(jnp.ones(2) * 0.15)
     measurement = GaussianRV(meas_val, meas_cov)
 
     # Compute innovations
@@ -395,7 +375,7 @@ def test_innovation_consistency():
     innov_sq = sq_filter.innovation(pred_sq, measurement)
 
     # Innovations should match
-    jnp.testing.assert_allclose(innov_standard.mean, innov_sq.mean, rtol=1e-10)
+    np.testing.assert_allclose(innov_standard.mean, innov_sq.mean, rtol=1e-10)
     # Compare covariance values (handle different representations)
     innov_sq_cov = (
         innov_sq.covariance
@@ -408,4 +388,4 @@ def test_innovation_consistency():
         else innov_standard.covariance.full()
     )
 
-    jnp.testing.assert_allclose(innov_standard_cov, innov_sq_cov, rtol=1e-10)
+    np.testing.assert_allclose(innov_standard_cov, innov_sq_cov, rtol=1e-10)

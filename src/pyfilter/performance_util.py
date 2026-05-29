@@ -11,12 +11,8 @@ class MonitoredMethod(Protocol):
 
 
 # Global cache for tracking calls per object
-_OBJECT_CALL_COUNTS: weakref.WeakKeyDictionary[Any, dict[str, Any]] = (
-    weakref.WeakKeyDictionary()
-)
-_CACHED_RESULTS: weakref.WeakKeyDictionary[Any, dict[Any, Any]] = (
-    weakref.WeakKeyDictionary()
-)
+_OBJECT_CALL_COUNTS: weakref.WeakKeyDictionary[Any, dict[str, Any]] = weakref.WeakKeyDictionary()
+_CACHED_RESULTS: weakref.WeakKeyDictionary[Any, dict[Any, Any]] = weakref.WeakKeyDictionary()
 
 
 def performance_monitor(

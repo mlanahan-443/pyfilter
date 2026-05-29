@@ -4,9 +4,7 @@ from functools import cached_property
 
 import jax
 from jax import numpy as jnp
-from jax.typing import DTypeLike
 
-from pyfilter.config import FDTYPE_ as FDTYPE
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types import CovarianceBase, GaussianRV
 
@@ -23,11 +21,9 @@ class ProcessNoise(ABC):
         return self.covariance(dt)
 
 
-def _full_intensity_matrix(
-    intensity: JaxFloatArray, n: int, dtype: DTypeLike = FDTYPE
-) -> JaxFloatArray:
+def _full_intensity_matrix(intensity: JaxFloatArray, n: int) -> JaxFloatArray:
     """Normalize ``intensity`` to a full $(..., n, n)$ matrix."""
-    Q = jnp.asarray(intensity, dtype=dtype)
+    Q = jnp.asarray(intensity)
     if Q.ndim == 0:
         return Q * jnp.eye(n, dtype=Q.dtype)
     if Q.ndim == 1:
@@ -35,9 +31,7 @@ def _full_intensity_matrix(
             raise ValueError(f"1-D intensity must have length {n}, got {Q.shape}")
         return jnp.diag(Q)
     if Q.shape[-2:] != (n, n):
-        raise ValueError(
-            f"Intensity matrix must have trailing shape ({n}, {n}), got {Q.shape}"
-        )
+        raise ValueError(f"Intensity matrix must have trailing shape ({n}, {n}), got {Q.shape}")
     return Q
 
 
@@ -97,7 +91,6 @@ class WeinerProcessNoise(ProcessNoise):
     n: int
     p: int
     intensity: JaxFloatArray
-    dtype: DTypeLike = FDTYPE
 
     def __post_init__(self) -> None:
         if self.n < 1 or self.p < 1:
@@ -126,12 +119,12 @@ class WeinerProcessNoise(ProcessNoise):
 
         factorials = jax.scipy.special.factorial(prange)
         denom = factorials[a_i] * factorials[a_j] * exponents
-        coeffs = 1.0 / denom.astype(self.dtype)  # (p, p)
-        return exponents.astype(self.dtype), coeffs
+        coeffs = 1.0 / denom  # (p, p)
+        return exponents, coeffs
 
     @cached_property
     def _intensity_matrix(self) -> JaxFloatArray:
-        return _full_intensity_matrix(self.intensity, self.n, dtype=self.dtype)
+        return _full_intensity_matrix(self.intensity, self.n)
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete process noise covariance $Q_d(\\Delta t)$.
@@ -194,7 +187,7 @@ class VanLoanProcessNoise(ProcessNoise):
     >>> Q_c = jnp.zeros_like(A)
     >>> Q_c[2:,2:] = jnp.eye(2)*0.1
     >>> vlpn_cv_2d = VanLoanProcessNoise(A,Q_c)
-    >>> wpn_cv_2d(np.array(0.1))
+    >>> wpn_cv_2d(jnp.array(0.1))
     ... array([[3.33333333e-05, 0.00000000e+00, 5.00000000e-04, 0.00000000e+00],
     ...        [0.00000000e+00, 3.33333333e-05, 0.00000000e+00, 5.00000000e-04],
     ...        [5.00000000e-04, 0.00000000e+00, 1.00000000e-02, 0.00000000e+00],
@@ -203,7 +196,6 @@ class VanLoanProcessNoise(ProcessNoise):
 
     A: JaxFloatArray
     Qc: JaxFloatArray
-    dtype: type = FDTYPE
 
     def __post_init__(self):
         shape = jnp.broadcast_shapes(self.A.shape, self.Qc.shape)
@@ -226,10 +218,7 @@ class VanLoanProcessNoise(ProcessNoise):
         """
         Q = self.Qc
         A = self.A
-        return jnp.block(
-            [[-A,Q],[jnp.zeros_like(A),A.mT]]
-        )
-
+        return jnp.block([[-A, Q], [jnp.zeros_like(A), A.mT]])
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Compute covariance using van-loans discritization."""

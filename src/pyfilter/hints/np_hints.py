@@ -1,6 +1,6 @@
 from types import EllipsisType
 
-from jax import numpy as jnp
+import numpy as np
 from numpy.typing import NDArray
 
 type FloatArray = NDArray[np.floating]
@@ -11,7 +11,7 @@ type JaxIntArray = NDArray[np.integer]
 
 type IndexItem = (
     int  # Standard integer
-    | jnp.integer  # NumPy integer types (int8, int16, etc.)
+    | np.integer  # NumPy integer types (int8, int16, etc.)
     | slice  # A standard slice, e.g., :5
     | EllipsisType  # The ... object
     | None  # For new axes, e.g., jnp.newaxis
