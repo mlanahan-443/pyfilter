@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import JaxFloatArray
-from pyfilter.types import CovarianceBase, GaussianRV
+from pyfilter.types import CovarianceBase
 
 
 class ProcessNoise(ABC):
@@ -14,7 +14,7 @@ class ProcessNoise(ABC):
         self.shape = shape
 
     @abstractmethod
-    def covariance(self, dt: JaxFloatArray) -> GaussianRV | CovarianceBase:
+    def covariance(self, dt: JaxFloatArray) -> CovarianceBase:
         pass
 
     def __call__(self, dt: JaxFloatArray) -> CovarianceBase:

@@ -11,6 +11,9 @@ from pyfilter.models.linear import GenericLinearTransform, LTI_Transition
 from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
+import numpy as np
+
+jax.config.update("jax_enable_x64", True)
 
 
 @pytest.fixture
@@ -98,12 +101,12 @@ def A2(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
 class SimpleProcessNoise(ProcessNoise):
     """Simple constant process noise for testing."""
 
-    def __init__(self, shape: tuple):
-        super().__init__(shape)
-        self._cov = jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(jnp.ones(shape) * 1e-2)
+    def __init__(self, shape: int):
+        super().__init__((shape,))
+        self._cov = jnp.diag(jnp.ones(shape) * 1e-2)
 
     def covariance(self, dt: JaxFloatArray) -> GaussianRV:
-        return GaussianRV.zero_mean(self._cov)
+        return self._cov
 
 
 def test_linear_gaussian_kalman_basic():
@@ -118,7 +121,7 @@ def test_linear_gaussian_kalman_basic():
     transition_model = LTI_Transition(A)
 
     # Process noise
-    process_noise = SimpleProcessNoise((4, 4))
+    process_noise = SimpleProcessNoise(4)
 
     # Measurement model: observe first 2 components
     H = jax.nn.one_hot(jnp.array([0, 1]), 4)
@@ -200,13 +203,13 @@ def test_square_root_kalman_basic():
     transition_model = LTI_Transition(A)
 
     # Process noise
-    process_noise = SimpleProcessNoise((4, 4))
+    process_noise = SimpleProcessNoise(4)
 
     # Measurement model: observe first 2 components
-    H = jnp.zeros((2, 4))
+    H = np.zeros((2, 4))
     H[0, 0] = 1
     H[1, 1] = 1
-    measurement_model = GenericLinearTransform(H)
+    measurement_model = GenericLinearTransform(jnp.array(H))
 
     # Create square root filter
     sq_kalman_filter = SquareRootLinearGuassianKalman(
@@ -214,7 +217,6 @@ def test_square_root_kalman_basic():
     )
 
     # Generate random measurements
-    generator = default_rng(seed=42)
     num_steps = 10
     dt = jnp.array(0.1)
 
@@ -224,7 +226,7 @@ def test_square_root_kalman_basic():
         prediction = sq_kalman_filter.predict(state, dt)
 
         # Generate measurement
-        meas_val = generator.random(2)
+        meas_val = jax.random.uniform(key=jax.random.key(43), shape=(2,))
         meas_cov = DiagonalCovariance(jnp.ones(2) * 0.1)
         measurement = GaussianRV(meas_val, meas_cov)
 
@@ -263,7 +265,7 @@ def test_square_root_kalman_vs_standard():
     transition_model = LTI_Transition(A)
 
     # Process noise
-    process_noise = SimpleProcessNoise((4, 4))
+    process_noise = SimpleProcessNoise(4)
 
     # Measurement model: observe all components
     H = jnp.eye(4)
@@ -274,7 +276,7 @@ def test_square_root_kalman_vs_standard():
     sq_filter = SquareRootLinearGuassianKalman(transition_model, process_noise, measurement_model)
 
     # Run both filters
-    generator = default_rng(seed=123)
+
     num_steps = 5
     dt = jnp.array(0.1)
 
@@ -288,7 +290,7 @@ def test_square_root_kalman_vs_standard():
         np.testing.assert_allclose(pred_standard.covariance, pred_sq.covariance.full(), rtol=1e-10)
 
         # Generate measurement
-        meas_val = generator.random(4)
+        meas_val = jax.random.uniform(key=jax.random.key(43), shape=(4,))
         meas_cov = DiagonalCovariance(jnp.ones(4) * 0.2)
         measurement_standard = GaussianRV(meas_val.copy(), meas_cov.copy())
         measurement_sq = GaussianRV(meas_val.copy(), meas_cov.copy())
@@ -343,7 +345,7 @@ def test_innovation_consistency():
     """Test that innovation method is consistent between LinearGaussianKalman and SquareRootLinearGaussianKalman."""
     # Initialize states
     init_mean = jnp.array([1.0, 2.0, 3.0])
-    init_cov = jnp.diag([0.5, 0.3, 0.2])
+    init_cov = jnp.diag(jnp.array([0.5, 0.3, 0.2]))
     init_L = jnp.linalg.cholesky(init_cov)
 
     state_standard = GaussianRV(init_mean.copy(), init_cov.copy())
@@ -352,7 +354,7 @@ def test_innovation_consistency():
     # Models
     A = jnp.eye(3)
     transition_model = LTI_Transition(A)
-    process_noise = SimpleProcessNoise((3, 3))
+    process_noise = SimpleProcessNoise(3)
     H = jnp.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
     measurement_model = GenericLinearTransform(H)
 

@@ -9,6 +9,7 @@ from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
+import numpy as np
 
 
 @pytest.fixture
@@ -18,12 +19,12 @@ def data_path() -> Path:
 
 class TransitionModel(LinearTransitionBase):
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
-        A = jnp.zeros(dt.shape + (6, 6))
-        A[..., jnp.diag_indices(6)] = 1
+        A = np.zeros(dt.shape + (6, 6))
+        A[..., np.diag_indices(6)] = 1
         A[..., 0, 1] = A[..., 1, 2] = A[..., 3, 4] = A[..., 4, 5] = dt
         A[..., 0, 2] = A[..., 3, 5] = 0.5 * dt**2
 
-        return A
+        return jnp.array(A)
 
     def inverse(self, dt: JaxFloatArray):
         return jnp.linalg.inv(self.matrix(dt))
@@ -38,10 +39,16 @@ class MeasurementModel(LinearTransformBase):
 
     @property
     def matrix(self) -> JaxFloatArray:
-        H = jnp.zeros((2, 6))
+        H = np.zeros((2, 6))
         H[0, 0] = 1
         H[1, 3] = 1
-        return H
+        return jnp.array(H)
+
+    def transform_array(self, x):
+        return x[..., jnp.array([0, 3])]
+
+    def transform_covariance(self, cov):
+        return cov[..., jnp.array([0, 3]), jnp.array([0, 3])]
 
 
 class ProcessNoiseModel(ProcessNoise):
@@ -49,18 +56,18 @@ class ProcessNoiseModel(ProcessNoise):
         super().__init__(shape)
         self._intensity = intensity
 
-    def covariance(self, dt: JaxFloatArray) -> GaussianRV:
-        block = jnp.empty(dt.shape + (3, 3))
+    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
+        block = np.empty(dt.shape + (3, 3))
         block[..., 0, 0] = 0.25 * dt**4
         block[..., 0, 1] = block[..., 1, 0] = 0.5 * dt**3
         block[..., 0, 2] = block[..., 2, 0] = 0.5 * dt**2
         block[..., 1, 2] = block[..., 2, 1] = dt
         block[..., 1, 1] = dt**2
-        block[..., 2, 2] = jnp.ones_like(dt)
+        block[..., 2, 2] = np.ones_like(dt)
 
         zeros = jnp.zeros_like(block)
         mat = self._intensity * jnp.block([[block, zeros], [zeros, block]])
-        return GaussianRV.zero_mean(mat)
+        return mat
 
 
 @pytest.fixture
@@ -125,7 +132,7 @@ def test_linear_filter(
 
     measurements = GaussianRV(
         measurement_means,
-        jnp.repeat(measurement_covariance[np.newaxis, ...], len(measurement_means), axis=0),
+        jnp.repeat(measurement_covariance[jnp.newaxis, ...], len(measurement_means), axis=0),
     )
     state = GaussianRV(jnp.zeros(6), jnp.diag(jnp.ones(6)) * 500)
 

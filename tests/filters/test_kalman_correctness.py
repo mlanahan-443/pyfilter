@@ -20,6 +20,9 @@ from pyfilter.types.covariance import (
 )
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # ============================================================================
 # Simple Models for Testing
@@ -82,7 +85,16 @@ class PositionMeasurement(LinearTransformBase):
         return jnp.array([[1.0, 0.0]])
 
     def transform(self, x: GaussianRV) -> GaussianRV:
-        return x.marginal([0])
+        return x.marginal(jnp.array([0], dtype=jnp.int32))
+
+    def transform_array(self, x: JaxFloatArray) -> JaxFloatArray:
+        return x[..., :1]
+
+    def transform_covariance(self, cov: CholeskyFactorCovariance | JaxFloatArray):
+        if isinstance(cov, jnp.ndarray):
+            return cov[..., :1, :1]
+
+        return cov[..., :1, :1]
 
 
 class SimpleProcessNoise(ProcessNoise):
@@ -92,8 +104,8 @@ class SimpleProcessNoise(ProcessNoise):
         self._cov = covariance
         super().__init__(covariance.shape[-2:])
 
-    def covariance(self, dt: JaxFloatArray) -> GaussianRV:
-        return GaussianRV.zero_mean(self._cov)
+    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray | CholeskyFactorCovariance:
+        return self._cov
 
 
 # ============================================================================
