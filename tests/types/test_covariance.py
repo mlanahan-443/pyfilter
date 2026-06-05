@@ -11,6 +11,7 @@ from numpy.testing import assert_allclose
 from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
+    InformationCovariance,
     cholesky_factor,
     linear_cross_covariance,
     type_error_msg,
@@ -90,6 +91,13 @@ def diag_std(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
 @pytest.fixture
 def diag_cov(diag_std: jnp.ndarray) -> DiagonalCovariance:
     return DiagonalCovariance(diag_std.copy())
+
+
+@pytest.fixture
+def info_cov(P_full: jnp.ndarray) -> InformationCovariance:
+    """Create an InformationCovariance from Lambda = Sigma^{-1}"""
+    Lambda = jnp.linalg.inv(P_full)
+    return InformationCovariance(Lambda.copy())
 
 
 @pytest.fixture
@@ -569,3 +577,285 @@ class TestDiagonalCovariance:
         np.testing.assert_allclose(
             inv_check, inv, err_msg="Inverse computation failed for DiagonalCovariance"
         )
+
+
+# --- Test InformationCovariance ---
+
+
+class TestInformationCovariance:
+    def test_init(self, info_cov: InformationCovariance, P_full: jnp.ndarray, dim: int):
+        """Tests initialization and basic properties."""
+        Lambda = jnp.linalg.inv(P_full)
+
+        assert_allclose(info_cov._Lambda, Lambda)
+        assert info_cov.matrix_shape == (dim, dim)
+        assert info_cov.shape == P_full.shape
+        assert info_cov.batch_shape == P_full.shape[:-2]
+
+    def test_full(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests the .full() method returns Sigma = Lambda^{-1}"""
+        Sigma = info_cov.full()
+        assert_allclose(Sigma, P_full, rtol=1e-10, atol=1e-12)
+
+    def test_inverse(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests that .inverse() returns Lambda = Sigma^{-1}"""
+        Lambda = info_cov.inverse()
+        Lambda_expected = jnp.linalg.inv(P_full)
+        assert_allclose(Lambda, Lambda_expected, rtol=1e-10, atol=1e-12)
+
+    def test_variance(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests the .variance property."""
+        expected_variance = jnp.diagonal(P_full, axis1=-2, axis2=-1)
+        assert_allclose(info_cov.variance, expected_variance, rtol=1e-10, atol=1e-12)
+
+    def test_cholesky_factor(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests the .cholesky_factor property."""
+        L = info_cov.cholesky_factor
+        # Verify L @ L.T = Sigma
+        Sigma_reconstructed = jnp.einsum("...ik,...jk->...ij", L, L)
+        assert_allclose(Sigma_reconstructed, P_full, rtol=1e-10, atol=1e-12)
+
+    def test_trace(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Test that the trace is computed correctly."""
+        expected_trace = jnp.trace(P_full, axis1=-2, axis2=-1)
+        assert_allclose(info_cov.trace(), expected_trace, rtol=1e-10, atol=1e-12)
+
+    def test_copy(self, info_cov: InformationCovariance):
+        """Test that copy creates an independent copy."""
+        info_cov_copy = info_cov.copy()
+        assert_allclose(info_cov_copy._Lambda, info_cov._Lambda)
+        assert info_cov_copy.__id__()[0] != info_cov.__id__()[0]
+
+    def test_mul(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests __mul__ by a scalar: c * Sigma = (Lambda / c)^{-1}"""
+        scalar = 4.0
+        result = info_cov * scalar
+
+        expected_Sigma = P_full * scalar
+        expected_Lambda = jnp.linalg.inv(expected_Sigma)
+
+        assert isinstance(result, InformationCovariance)
+        assert_allclose(result._Lambda, expected_Lambda, rtol=1e-10, atol=1e-12)
+        assert_allclose(result.full(), expected_Sigma, rtol=1e-10, atol=1e-12)
+
+    def test_quadratic_form(
+        self, info_cov: InformationCovariance, P_full: jnp.ndarray, A_matrix: jnp.ndarray
+    ):
+        """Tests the quadratic_form method: A @ Sigma @ A.T"""
+        result_cov = info_cov.quadratic_form(A_matrix)
+
+        # Expected: A @ Sigma @ A.T
+        expected_Sigma = jnp.einsum(
+            "...ik,...kl,...jl->...ij", A_matrix, P_full, A_matrix, optimize=True
+        )
+
+        assert isinstance(result_cov, InformationCovariance)
+        assert_allclose(result_cov.full(), expected_Sigma, rtol=1e-9, atol=1e-11)
+
+    def test_add_info(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests __add__ with another InformationCovariance."""
+        P2 = P_full * 0.5 + 2.0 * jnp.eye(P_full.shape[-1])
+        Lambda2 = jnp.linalg.inv(P2)
+        info_cov2 = InformationCovariance(Lambda2)
+
+        result = info_cov + info_cov2
+        expected_P = P_full + P2
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_add_chol(
+        self,
+        info_cov: InformationCovariance,
+        chol_cov: CholeskyFactorCovariance,
+        P_full: jnp.ndarray,
+    ):
+        """Tests __add__ with a CholeskyFactorCovariance."""
+        result = info_cov + chol_cov
+        expected_P = P_full + chol_cov.full()
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_add_diag(
+        self, info_cov: InformationCovariance, diag_cov: DiagonalCovariance, P_full: jnp.ndarray
+    ):
+        """Tests __add__ with a DiagonalCovariance."""
+        result = info_cov + diag_cov
+        expected_P = P_full + diag_cov.full()
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_add_ndarray(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests __add__ with a raw jnp.ndarray."""
+        P2 = P_full * 0.5 + 2.0 * jnp.eye(P_full.shape[-1])
+
+        result = info_cov + P2
+        expected_P = P_full + P2
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_radd(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests __radd__ (commutative addition)."""
+        P2 = P_full * 0.5 + 2.0 * jnp.eye(P_full.shape[-1])
+
+        result = P2 + info_cov
+        expected_P = P2 + P_full
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_sub_info(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Tests __sub__ with another InformationCovariance."""
+        P2 = P_full * 0.5
+        Lambda2 = jnp.linalg.inv(P2)
+        info_cov2 = InformationCovariance(Lambda2)
+
+        result = info_cov - info_cov2
+        expected_P = P_full - P2
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_sub_chol(
+        self,
+        info_cov: InformationCovariance,
+        chol_cov: CholeskyFactorCovariance,
+        P_full: jnp.ndarray,
+    ):
+        """Tests __sub__ with a CholeskyFactorCovariance."""
+        # Make sure info_cov is larger than chol_cov
+        P_large = P_full * 2
+        info_cov_large = InformationCovariance(jnp.linalg.inv(P_large))
+
+        result = info_cov_large - chol_cov
+        expected_P = P_large - chol_cov.full()
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_sub_diag(
+        self, info_cov: InformationCovariance, diag_cov: DiagonalCovariance, P_full: jnp.ndarray
+    ):
+        """Tests __sub__ with a DiagonalCovariance."""
+        # Make sure info_cov is larger than diag_cov
+        P_large = P_full * 2
+        info_cov_large = InformationCovariance(jnp.linalg.inv(P_large))
+
+        result = info_cov_large - diag_cov
+        expected_P = P_large - diag_cov.full()
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_slice(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Test that indexing works as anticipated."""
+        partial_info_cov = info_cov[..., 0:2, 0:2]
+
+        partial_full = partial_info_cov.full()
+        check_full = P_full[..., 0:2, 0:2]
+        assert_allclose(check_full, partial_full, rtol=1e-10, atol=1e-12)
+
+    def test_at_index(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Test at indexing."""
+        rng = jnp.arange(0, info_cov.matrix_shape[0], 2)
+        index = jnp.ix_(rng, rng)
+        partial_info_cov = info_cov.at[..., *index]
+
+        partial_full = partial_info_cov.full()
+        check_full = P_full[..., *index]
+        assert_allclose(check_full, partial_full, rtol=1e-10, atol=1e-12)
+
+    def test_biloc_index(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Test batch indexing."""
+        if info_cov.ndim > 2:
+            bidx = (
+                (jnp.array([0]),)
+                if info_cov.ndim == 3
+                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
+            )
+            partial_info_cov = info_cov.biloc[*bidx]
+
+            partial_full = partial_info_cov.full()
+            check_full = P_full[bidx]
+            assert_allclose(check_full, partial_full, rtol=1e-10, atol=1e-12)
+
+    def test_concatenate(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
+        """Test concatenation of multiple InformationCovariance objects."""
+        if info_cov.ndim > 2:
+            # Create two covariances to concatenate
+            info_list = [info_cov[0:1], info_cov[1:2]]
+            concatenated = InformationCovariance.concatenate(info_list, axis=0)
+
+            expected_full = jnp.concatenate([c.full() for c in info_list], axis=0)
+            assert_allclose(concatenated.full(), expected_full, rtol=1e-10, atol=1e-12)
+
+    def test_type_errors(self, info_cov: InformationCovariance):
+        """Tests that invalid types raise TypeError."""
+        with pytest.raises(TypeError, match=re.escape(type_error_msg("string"))):
+            info_cov + "string"
+
+        with pytest.raises(TypeError, match=re.escape(type_error_msg("string"))):
+            info_cov - "string"
+
+
+# --- Test Interactions Between Covariance Types ---
+
+
+class TestCovarianceInteractions:
+    def test_chol_add_info(
+        self,
+        chol_cov: CholeskyFactorCovariance,
+        info_cov: InformationCovariance,
+        P_full: jnp.ndarray,
+    ):
+        """Test CholeskyFactorCovariance + InformationCovariance."""
+        result = chol_cov + info_cov
+        expected_P = chol_cov.full() + P_full
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_chol_sub_info(
+        self,
+        chol_cov: CholeskyFactorCovariance,
+        info_cov: InformationCovariance,
+        P_full: jnp.ndarray,
+    ):
+        """Test CholeskyFactorCovariance - InformationCovariance."""
+        # Make chol_cov larger
+        P_large = chol_cov.full() * 2
+        chol_cov_large = cholesky_factor(P_large)
+
+        result = chol_cov_large - info_cov
+        expected_P = P_large - P_full
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_diag_add_info(
+        self, diag_cov: DiagonalCovariance, info_cov: InformationCovariance, P_full: jnp.ndarray
+    ):
+        """Test DiagonalCovariance + InformationCovariance."""
+        result = diag_cov + info_cov
+        expected_P = diag_cov.full() + P_full
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)
+
+    def test_diag_sub_info(
+        self, diag_cov: DiagonalCovariance, info_cov: InformationCovariance, P_full: jnp.ndarray
+    ):
+        """Test DiagonalCovariance - InformationCovariance."""
+        # Make diag_cov much larger to ensure result is positive definite
+        # Use the diagonal of P_full plus a large offset
+        P_diag_large_values = jnp.diagonal(P_full, axis1=-2, axis2=-1) * 10 + 20
+        diag_cov_large = DiagonalCovariance(jnp.sqrt(P_diag_large_values))
+
+        result = diag_cov_large - info_cov
+        expected_P = diag_cov_large.full() - P_full
+
+        assert isinstance(result, CholeskyFactorCovariance)
+        assert_allclose(result.full(), expected_P, rtol=1e-10, atol=1e-12)

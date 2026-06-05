@@ -61,6 +61,9 @@ class LinearTransitionBase[State: RandomVariable](eqx.Module, ABC):
     def transform(self, x: State, dt: JaxFloatArray) -> State:
         """Transform the state x(k) -> x(k+1)"""
 
+    @abstractmethod
+    def matrix(self, dt: JaxFloatArray) -> JaxFloatArray: ...
+
 
 @runtime_checkable
 class HasMatrix(Protocol):

@@ -5,10 +5,15 @@ from jax import numpy as jnp
 from pyfilter.filter.linear import (
     LinearGaussianKalman,
     SquareRootLinearGuassianKalman,
+    InformationLinearGuassianFilter,
 )
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import GenericLinearTransform, LTI_Transition
-from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
+from pyfilter.types.covariance import (
+    CholeskyFactorCovariance,
+    DiagonalCovariance,
+    InformationCovariance,
+)
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 import numpy as np
@@ -109,6 +114,9 @@ class SimpleProcessNoise(ProcessNoise):
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         return jnp.diag(jnp.ones(self._shape) * 1e-2)
+
+    def inverse_covariance(self, dt: JaxFloatArray) -> InformationCovariance:
+        return InformationCovariance(jnp.diag(jnp.ones(self._shape) * 100))
 
 
 def test_linear_gaussian_kalman_basic():
@@ -243,6 +251,56 @@ def test_square_root_kalman_basic():
         assert jnp.all(jnp.isfinite(state.covariance.cholesky_factor))
 
 
+def test_information_kalman_basic():
+    """Test the basics of the information kalman filter."""
+    # Initialize state: 4D state vector with Cholesky covariance
+    init_mean = jnp.zeros(4)
+    init_L = jnp.eye(4) * 100  # Initial information.
+    init_state = GaussianRV(init_mean, InformationCovariance(init_L))
+
+    # Transition model: identity
+    A = jnp.eye(4)
+    transition_model = LTI_Transition(A)
+
+    # Process noise
+    process_noise = SimpleProcessNoise(4)
+
+    # Measurement model: observe first 2 components
+    H = np.zeros((2, 4))
+    H[0, 0] = 1
+    H[1, 1] = 1
+    measurement_model = GenericLinearTransform(jnp.array(H))
+
+    # Create square root filter
+    information_kalman_filter = InformationLinearGuassianFilter(
+        transition_model, process_noise, measurement_model
+    )
+
+    # Generate random measurements
+    num_steps = 10
+    dt = jnp.array(0.1)
+
+    state = init_state
+    for _i in range(num_steps):
+        # Predict
+        prediction = information_kalman_filter.predict(state, dt)
+
+        # Generate measurement
+        meas_val = jax.random.uniform(key=jax.random.key(43), shape=(2,))
+        meas_cov = DiagonalCovariance(jnp.ones(2) * 0.1)
+        measurement = GaussianRV(meas_val, meas_cov)
+
+        # Update directly from measurement
+        state = information_kalman_filter.update(prediction, measurement)
+
+        # Verify state is valid
+        assert state.mean.shape == (4,)
+        assert isinstance(state.covariance, InformationCovariance)
+        assert state.covariance.cholesky_factor.shape == (4, 4)
+        assert jnp.all(jnp.isfinite(state.mean))
+        assert jnp.all(jnp.isfinite(state.covariance.cholesky_factor))
+
+
 def test_square_root_kalman_vs_standard():
     """Test that SquareRootLinearGaussianKalman produces same results as LinearGaussianKalman."""
     # Initialize state
@@ -304,6 +362,75 @@ def test_square_root_kalman_vs_standard():
         # Verify updates match
         np.testing.assert_allclose(state_standard.mean, state_sq.mean, rtol=1e-8)
         np.testing.assert_allclose(state_standard.covariance, state_sq.covariance.full(), rtol=1e-8)
+
+
+def test_information_kalman_vs_standard():
+    """Test that InformationLinearGuassianFilter produces same results as LinearGaussianKalman."""
+    # Initialize state
+    init_mean = jnp.array([1.0, 2.0, 3.0, 4.0])
+    init_cov = jnp.eye(4) * 0.5
+    init_lambda = jnp.linalg.inv(init_cov)
+
+    # Standard filter state
+    state_standard = GaussianRV(init_mean.copy(), init_cov.copy())
+    # Square root filter state
+    state_info = GaussianRV(init_mean.copy(), InformationCovariance(init_lambda.copy()))
+
+    # Transition model
+    A = jnp.array(
+        [
+            [1.0, 0.1, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.1],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    transition_model = LTI_Transition(A)
+
+    # Process noise
+    process_noise = SimpleProcessNoise(4)
+
+    # Measurement model: observe all components
+    H = jnp.eye(4)
+    measurement_model = GenericLinearTransform(H)
+
+    # Create both filters
+    standard_filter = LinearGaussianKalman(transition_model, process_noise, measurement_model)
+    info_filter = InformationLinearGuassianFilter(
+        transition_model, process_noise, measurement_model
+    )
+
+    # Run both filters
+
+    num_steps = 5
+    dt = jnp.array(0.1)
+
+    for _i in range(num_steps):
+        # Predict
+        pred_standard = standard_filter.predict(state_standard, dt)
+        pred_info = info_filter.predict(state_info, dt)
+
+        # Verify predictions match
+        np.testing.assert_allclose(pred_standard.mean, pred_info.mean, rtol=1e-10)
+        np.testing.assert_allclose(
+            pred_standard.covariance, pred_info.covariance.full(), rtol=1e-10
+        )
+
+        # Generate measurement
+        meas_val = jax.random.uniform(key=jax.random.key(43), shape=(4,))
+        meas_cov = DiagonalCovariance(jnp.ones(4) * 0.2)
+        measurement_standard = GaussianRV(meas_val.copy(), meas_cov.copy())
+        measurement_sq = GaussianRV(meas_val.copy(), meas_cov.copy())
+
+        # Update
+        state_standard = standard_filter.update(pred_standard, measurement_standard)
+        state_info = info_filter.update(pred_info, measurement_sq)
+
+        # Verify updates match
+        np.testing.assert_allclose(state_standard.mean, state_info.mean, rtol=1e-8)
+        np.testing.assert_allclose(
+            state_standard.covariance, state_info.covariance.full(), rtol=1e-8
+        )
 
 
 def test_square_root_kalman_innovation():

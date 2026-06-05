@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import JaxFloatArray
-from pyfilter.types import CovarianceBase
+from pyfilter.types import CovarianceBase, InformationCovariance
 
 
 class ProcessNoise(eqx.Module, ABC):
@@ -17,6 +17,9 @@ class ProcessNoise(eqx.Module, ABC):
     @abstractmethod
     def covariance(self, dt: JaxFloatArray) -> CovarianceBase | JaxFloatArray:
         pass
+
+    @abstractmethod
+    def inverse_covariance(self, dt: JaxFloatArray) -> InformationCovariance | JaxFloatArray: ...
 
     def __call__(self, dt: JaxFloatArray) -> CovarianceBase | JaxFloatArray:
         return self.covariance(dt)
@@ -150,6 +153,9 @@ class WeinerProcessNoise(ProcessNoise):
         out_batch = jnp.broadcast_shapes(dt.shape, intensity_batch)
         return Qd.reshape((*out_batch, self.state_dim, self.state_dim))
 
+    def inverse_covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
+        return jax.numpy.linalg.inv(self.covariance(dt))
+
 
 class VanLoanProcessNoise(ProcessNoise):
     r"""Obtain discrete process noise numerically from continuous transition and process noise covariances.
@@ -231,3 +237,6 @@ class VanLoanProcessNoise(ProcessNoise):
 
         # Symmetrize, the matrix exponential has some low level (~1e-15) noise.
         return 0.5 * (Q_d + Q_d.mT)
+
+    def inverse_covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
+        return jax.numpy.linalg.inv(self.covariance(dt))

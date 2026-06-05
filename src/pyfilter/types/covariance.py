@@ -24,6 +24,7 @@ type CovarianceType = CovarianceBase | JaxFloatArray
 ALLOWED_TYPES_ = [
     "CholeskyFactorCovariance",
     "DiagonalCovariance",
+    "InformationCovariance",
     "np.ndarray",
     "Number",
 ]
@@ -330,19 +331,27 @@ class CholeskyFactorCovariance(CovarianceBase):
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         return cholesky_factor(
-            self.full() + (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
+            self.full() + (other.full() if isinstance(other, CovarianceBase) else other)
         )
+
+    def _add_to_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
+        """Addition of an information covariance object (other) to self."""
+        return cholesky_factor(self.full() + other.full())
 
     def _sub_covariance(
         self, other: CholeskyFactorCovariance | JaxFloatArray
     ) -> CholeskyFactorCovariance:
-        """Addition of one covariance object (other) to self.
+        """Subtraction of one covariance object (other) from self.
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         return cholesky_factor(
-            self.full() - (other.full() if isinstance(other, CholeskyFactorCovariance) else other)
+            self.full() - (other.full() if isinstance(other, CovarianceBase) else other)
         )
+
+    def _sub_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
+        """Subtraction of an information covariance object (other) from self."""
+        return cholesky_factor(self.full() - other.full())
 
     def _add_to_diagonal(self, other: DiagonalCovariance) -> CholeskyFactorCovariance:
         """Addition of a diagonal covariance object (other) to self.
@@ -399,6 +408,8 @@ class CholeskyFactorCovariance(CovarianceBase):
             return self._add_to_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._add_to_diagonal(other)
+        elif isinstance(other, InformationCovariance):
+            return self._add_to_information(other)
         else:
             raise TypeError(type_error_msg(other))
 
@@ -437,6 +448,8 @@ class CholeskyFactorCovariance(CovarianceBase):
             return self._sub_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._sub_diagonal(other)
+        elif isinstance(other, InformationCovariance):
+            return self._sub_information(other)
         else:
             raise TypeError(type_error_msg(other))
 
@@ -559,6 +572,217 @@ class CholeskyFactorCovariance(CovarianceBase):
         return cls(L)
 
 
+class InformationCovariance(CovarianceBase):
+    """Specify a covariance using its inverse (information form).
+
+    Stores Lambda = Sigma^{-1} (the precision matrix) for efficient information filtering.
+    """
+
+    _Lambda: JaxFloatArray
+
+    @property
+    def matrix_shape(self) -> tuple[int, int]:
+        return (self._Lambda.shape[-2], self._Lambda.shape[-1])
+
+    def copy(self) -> InformationCovariance:
+        return InformationCovariance(self._Lambda.copy())
+
+    @property
+    def batch_shape(self) -> tuple[int, ...]:
+        """The batch shape"""
+        return self._Lambda.shape[:-2]
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The shape of the underlying array"""
+        return self._Lambda.shape
+
+    @property
+    def ndim(self) -> int:
+        """Number of dimensions of the underyling matrix."""
+        return self._Lambda.ndim
+
+    @property
+    def cholesky_factor(self) -> JaxFloatArray:
+        """Get Cholesky factor L of Sigma = Lambda^{-1} where Sigma = L @ L.T"""
+        # Solve Lambda @ X = I to get X = Sigma = Lambda^{-1}
+        # Use Cholesky decomposition of Lambda for numerical stability
+        L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
+        identity = jnp.broadcast_to(
+            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
+        )
+        Sigma = cho_solve(
+            (L_lambda, lower),
+            identity,
+            check_finite=CHOLESKY_CHECK_FINITE_,
+            overwrite_b=False,
+        )
+        # Now get Cholesky factor of Sigma
+        L_sigma, _ = cho_factor(Sigma, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
+        return jnp.tril(L_sigma)
+
+    @property
+    def variance(self) -> JaxFloatArray:
+        """Get diagonal of Sigma = Lambda^{-1}"""
+        # For efficiency, we only compute the diagonal elements
+        # diag(Lambda^{-1}) can be computed by solving Lambda @ X = I and taking diag(X)
+        identity = jnp.broadcast_to(
+            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
+        )
+        L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
+        Sigma = cho_solve(
+            (L_lambda, lower),
+            identity,
+            check_finite=CHOLESKY_CHECK_FINITE_,
+            overwrite_b=False,
+        )
+        return jnp.diagonal(Sigma, axis1=-2, axis2=-1)
+
+    def full(self) -> JaxFloatArray:
+        """The full covariance matrix Sigma = Lambda^{-1}.
+
+        Returns:
+            JaxFloatArray: The full covariance matrix.
+        """
+        identity = jnp.broadcast_to(
+            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
+        )
+        L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
+        return cho_solve(
+            (L_lambda, lower),
+            identity,
+            check_finite=CHOLESKY_CHECK_FINITE_,
+            overwrite_b=False,
+        )
+
+    def __id__(self) -> tuple[int, int]:
+        """Return unique identifier for current state of _Lambda"""
+        return (id(self._Lambda), hash(self._Lambda.tobytes()))
+
+    def quadratic_form(self, other: JaxFloatArray) -> InformationCovariance:
+        """Compute A @ Sigma @ A.T in information form.
+
+        If Sigma = Lambda^{-1}, then A @ Sigma @ A.T = (A^{-T} @ Lambda @ A^{-1})^{-1}
+        For efficiency when A is invertible, we compute: Lambda_new = A^{-T} @ Lambda @ A^{-1}
+
+        Args:
+            other: Matrix A for the quadratic form
+
+        Returns:
+            InformationCovariance with updated precision matrix
+        """
+        # Compute A^{-1} @ Lambda @ A^{-T} = (A @ Lambda^{-1} @ A.T)^{-1}
+        # This is more numerically stable than inverting A directly
+        # We compute: Lambda_new^{-1} = A @ Lambda^{-1} @ A.T, then invert
+        Sigma = self.full()
+        Sigma_new = jnp.einsum("...ik,...kl,...jl->...ij", other, Sigma, other, optimize=True)
+        # Invert to get new Lambda
+        Lambda_new = jnp.linalg.inv(Sigma_new)
+        return InformationCovariance(Lambda_new)
+
+    def _add_to_covariance(self, other: CovarianceType) -> CholeskyFactorCovariance:
+        """Add another covariance to self.
+
+        Addition in covariance space requires conversion since Lambda = Sigma^{-1}.
+        """
+        Sigma_self = self.full()
+        Sigma_other = other.full() if isinstance(other, CovarianceBase) else other
+        return cholesky_factor(Sigma_self + Sigma_other)
+
+    def _add_to_diagonal(self, other: DiagonalCovariance) -> CholeskyFactorCovariance:
+        """Add diagonal covariance to self."""
+        Sigma = self.full()
+        mat = Sigma.copy()
+        mat = mat.at[..., *self.diagonal_indices].add(other.variance)
+        return cholesky_factor(mat)
+
+    def _sub_covariance(self, other: CovarianceType) -> CholeskyFactorCovariance:
+        """Subtract another covariance from self."""
+        Sigma_self = self.full()
+        Sigma_other = other.full() if isinstance(other, CovarianceBase) else other
+        return cholesky_factor(Sigma_self - Sigma_other)
+
+    def _sub_diagonal(self, other: DiagonalCovariance) -> CholeskyFactorCovariance:
+        """Subtract diagonal covariance from self."""
+        Sigma = self.full()
+        mat = Sigma.copy()
+        mat = mat.at[..., *self.diagonal_indices].subtract(other.variance)
+        return cholesky_factor(mat)
+
+    def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance:
+        """Add covariances (requires conversion from information form)."""
+        if isinstance(
+            other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)
+        ):
+            return self._add_to_covariance(other)
+        elif isinstance(other, DiagonalCovariance):
+            return self._add_to_diagonal(other)
+        else:
+            raise TypeError(type_error_msg(other))
+
+    def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance:
+        """Addition is commutative."""
+        return self.__add__(other)
+
+    def __sub__(self, other: CovarianceType) -> CholeskyFactorCovariance:
+        """Subtract covariance from self."""
+        if isinstance(
+            other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)
+        ):
+            return self._sub_covariance(other)
+        elif isinstance(other, DiagonalCovariance):
+            return self._sub_diagonal(other)
+        else:
+            raise TypeError(type_error_msg(other))
+
+    def __mul__(self, other: float) -> InformationCovariance:
+        """Multiply covariance by scalar: c * Sigma = (1/c * Lambda)^{-1}"""
+        return InformationCovariance(self._Lambda / other)
+
+    def inverse(self) -> JaxFloatArray:
+        """Return the precision matrix Lambda = Sigma^{-1}"""
+        return self._Lambda
+
+    def _is_safe_matrix_slice(self, matrix_indexer: tuple[IndexItem, ...]) -> bool:
+        """Information matrices cannot be safely sliced directly.
+
+        Slicing the precision matrix Lambda doesn't preserve the precision structure
+        for the sliced covariance. We must always use the slow path via full().
+        """
+        return False
+
+    def _apply_fast_matrix_slice(
+        self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
+    ) -> InformationCovariance:
+        """Apply fast slicing to Lambda"""
+        Lambda_view = self._Lambda[batch_idx]
+        return InformationCovariance(Lambda_view[..., *matrix_idx])
+
+    def _apply_biloc_indexing(self, index: ArrayIndex) -> InformationCovariance:
+        """Batch indexing"""
+        return InformationCovariance(self._Lambda[index])
+
+    def _apply_at_indexing(self, index: ArrayIndex) -> InformationCovariance:
+        """Arbitrary indexing via full matrix"""
+        new_Sigma = self.full()[index]
+        if new_Sigma.shape[-1] != new_Sigma.shape[-2]:
+            raise IndexError(
+                f"Indexing key '{index}' resulted in a non-square matrix shape {new_Sigma.shape}. "
+                f"Last two dimensions were ({new_Sigma.shape[-2]}, {new_Sigma.shape[-1]})."
+            )
+        # Convert back to information form
+        new_Lambda = jnp.linalg.inv(new_Sigma)
+        return InformationCovariance(new_Lambda)
+
+    @classmethod
+    def concatenate(
+        cls, other: Iterable[InformationCovariance], axis: int = 0
+    ) -> InformationCovariance:
+        """Concatenate multiple InformationCovariance objects"""
+        Lambda = jnp.concatenate([cov._Lambda for cov in other], axis=axis)
+        return cls(Lambda)
+
+
 class DiagonalCovariance(CovarianceBase):
     """Specify a covariance using the standard deviations.
 
@@ -633,7 +857,13 @@ class DiagonalCovariance(CovarianceBase):
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
-        mat = other.full() if isinstance(other, CholeskyFactorCovariance) else other.copy()
+        mat = other.full() if isinstance(other, CovarianceBase) else other.copy()
+        mat = mat.at[..., *self.diagonal_indices].add(self.variance)
+        return cholesky_factor(mat)
+
+    def _add_to_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
+        """Addition of an information covariance object (other) to self."""
+        mat = other.full()
         mat = mat.at[..., *self.diagonal_indices].add(self.variance)
         return cholesky_factor(mat)
 
@@ -645,8 +875,13 @@ class DiagonalCovariance(CovarianceBase):
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
         # Compute self - other where self is diagonal
-        other_mat = other.full() if isinstance(other, CholeskyFactorCovariance) else other.copy()
+        other_mat = other.full() if isinstance(other, CovarianceBase) else other.copy()
         mat = self.full() - other_mat
+        return cholesky_factor(mat)
+
+    def _sub_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
+        """Subtraction of an information covariance object (other) from self."""
+        mat = self.full() - other.full()
         return cholesky_factor(mat)
 
     def _add_to_diagonal(self, other: DiagonalCovariance) -> DiagonalCovariance:
@@ -700,6 +935,8 @@ class DiagonalCovariance(CovarianceBase):
             return self._add_to_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._add_to_diagonal(other)
+        elif isinstance(other, InformationCovariance):
+            return self._add_to_information(other)
         else:
             raise TypeError(type_error_msg(other))
 
@@ -738,6 +975,8 @@ class DiagonalCovariance(CovarianceBase):
             return self._sub_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._sub_diagonal(other)
+        elif isinstance(other, InformationCovariance):
+            return self._sub_information(other)
         else:
             raise TypeError(type_error_msg(other))
 
