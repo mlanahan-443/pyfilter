@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
+import equinox as eqx
 import jax
 from jax import numpy as jnp
 
@@ -9,15 +10,16 @@ from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types import CovarianceBase
 
 
-class ProcessNoise(ABC):
-    def __init__(self, shape: tuple[int, ...]):
-        self.shape = shape
+class ProcessNoise(eqx.Module, ABC):
+    @property
+    @abstractmethod
+    def shape(self) -> tuple[int, ...]: ...
 
     @abstractmethod
-    def covariance(self, dt: JaxFloatArray) -> CovarianceBase:
+    def covariance(self, dt: JaxFloatArray) -> CovarianceBase | JaxFloatArray:
         pass
 
-    def __call__(self, dt: JaxFloatArray) -> CovarianceBase:
+    def __call__(self, dt: JaxFloatArray) -> CovarianceBase | JaxFloatArray:
         return self.covariance(dt)
 
 
@@ -90,13 +92,11 @@ class WeinerProcessNoise(ProcessNoise):
 
     n: int
     p: int
-    intensity: JaxFloatArray
+    intensity: JaxFloatArray = eqx.field(converter=jax.numpy.asarray)
 
-    def __post_init__(self) -> None:
-        if self.n < 1 or self.p < 1:
-            raise ValueError("n and p must be >= 1")
-
-        super().__init__((*self.intensity.shape[:-2], self.state_dim, self.state_dim))
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return (*self.intensity.shape[:-2], self.state_dim, self.state_dim)
 
     @property
     def state_dim(self) -> int:
@@ -194,15 +194,15 @@ class VanLoanProcessNoise(ProcessNoise):
     ...        [0.00000000e+00, 5.00000000e-04, 0.00000000e+00, 1.00000000e-02]])
     """
 
-    A: JaxFloatArray
-    Qc: JaxFloatArray
-
-    def __post_init__(self):
-        shape = jnp.broadcast_shapes(self.A.shape, self.Qc.shape)
-        super().__init__(shape)
+    A: JaxFloatArray = eqx.field(converter=jax.numpy.asarray)
+    Qc: JaxFloatArray = eqx.field(converter=jax.numpy.asarray)
 
     @property
-    def n(self):
+    def shape(self) -> tuple[int, ...]:
+        return jnp.broadcast_shapes(self.A.shape, self.Qc.shape)
+
+    @property
+    def n(self) -> int:
         return self.A.shape[-1]
 
     @cached_property

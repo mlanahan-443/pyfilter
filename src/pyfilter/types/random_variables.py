@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Self
 
+import equinox as eqx
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import ArrayIndex, JaxFloatArray
@@ -23,49 +24,9 @@ type Variable = GaussianRV[Any] | JaxFloatArray | CovarianceBase | float
 
 
 @dataclass
-class GaussianRV[Covariance: CovarianceType]:
+class GaussianRV[Covariance: CovarianceType](eqx.Module):
     mean: JaxFloatArray
     covariance: Covariance
-
-    def __post_init__(self) -> None:
-        """Validate that mean and covariance have compatible shapes."""
-
-        # Check that mean has at least 1 dimension
-        if self.mean.ndim < 1:
-            raise ValueError(f"Mean must have at least 1 dimension, got shape {self.mean.shape}")
-
-        # Check that covariance has at least 2 dimensions
-        if self.covariance.ndim < 2:
-            raise ValueError(
-                f"Covariance must have at least 2 dimensions, got shape {self.covariance.shape}"
-            )
-
-        # Check that the last two dimensions of covariance are square
-        if self.covariance.shape[-1] != self.covariance.shape[-2]:
-            raise ValueError(
-                f"Last two dimensions of covariance must be square, got shape {self.covariance.shape}"
-            )
-
-        # Check that dimensions match
-        n = self.mean.shape[-1]
-        if self.covariance.shape[-1] != n:
-            raise ValueError(
-                f"Last dimension of mean ({n}) must match last dimensions of covariance ({self.covariance.shape[-1]})"
-            )
-
-        # Check that batch dimensions match
-        if self.mean.ndim != self.covariance.ndim - 1:
-            raise ValueError(
-                f"Covariance {self.covariance.ndim=} and mean {self.mean.ndim=} number of dimensons must differ by 1."
-            )
-
-        if self.mean.ndim != 1:
-            mean_batch = self.mean.shape[:-1]
-            cov_batch = self.covariance.shape[:-2]
-            if mean_batch != cov_batch:
-                raise ValueError(
-                    f"Batch dimensions of mean {mean_batch} and covariance {cov_batch} must match"
-                )
 
     @property
     def shape(self) -> tuple[int, ...]:

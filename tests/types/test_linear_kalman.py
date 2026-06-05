@@ -101,12 +101,14 @@ def A2(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
 class SimpleProcessNoise(ProcessNoise):
     """Simple constant process noise for testing."""
 
-    def __init__(self, shape: int):
-        super().__init__((shape,))
-        self._cov = jnp.diag(jnp.ones(shape) * 1e-2)
+    _shape: int
 
-    def covariance(self, dt: JaxFloatArray) -> GaussianRV:
-        return self._cov
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return (self._shape,)
+
+    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
+        return jnp.diag(jnp.ones(self._shape) * 1e-2)
 
 
 def test_linear_gaussian_kalman_basic():

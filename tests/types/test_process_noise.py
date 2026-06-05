@@ -25,14 +25,6 @@ def s(x: float) -> jnp.ndarray:
 
 
 class TestConstruction:
-    def test_invalid_n(self) -> None:
-        with pytest.raises(ValueError, match="n and p must be >= 1"):
-            WeinerProcessNoise(n=0, p=2, intensity=jnp.asarray(1.0))
-
-    def test_invalid_p(self) -> None:
-        with pytest.raises(ValueError, match="n and p must be >= 1"):
-            WeinerProcessNoise(n=2, p=0, intensity=jnp.asarray(1.0))
-
     def test_state_dim(self) -> None:
         noise = WeinerProcessNoise(n=3, p=4, intensity=jnp.asarray(1.0))
         assert noise.state_dim == 12

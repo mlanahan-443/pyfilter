@@ -3,19 +3,19 @@ Name: pyfilter
 Version: 0.1.0
 Summary: A Python implementation of Kalman filtering
 Author-email: Michael Lanahan <michael.lanahan0430@gmail.com>
-Requires-Python: >=3.12
+Requires-Python: >=3.13
 Description-Content-Type: text/markdown
 Requires-Dist: numpy>=1.20.0
-Requires-Dist: pandas>=2.3.3
-Requires-Dist: jax.scipy>=1.17.0
+Requires-Dist: polars>=1.41
+Requires-Dist: scipy>=1.17.0
 Requires-Dist: jax>=0.10.0
+Requires-Dist: equinox>=0.13.8
 Provides-Extra: dev
 Requires-Dist: pytest>=6.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: mypy; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
-Requires-Dist: jax.scipy-stubs; extra == "dev"
-Requires-Dist: pandas-stubs; extra == "dev"
+Requires-Dist: scipy-stubs>=1.17.0; extra == "dev"
 Requires-Dist: ipykernel>=7.2.0; extra == "dev"
 Requires-Dist: matplotlib; extra == "dev"
 Requires-Dist: rich; extra == "dev"

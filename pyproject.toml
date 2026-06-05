@@ -7,15 +7,16 @@ name = "pyfilter"
 version = "0.1.0"
 description = "A Python implementation of Kalman filtering"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 authors = [
-    {name = "Michael Lanahan", email = "michael.lanahan0430@gmail.com"},
+    { name = "Michael Lanahan", email = "michael.lanahan0430@gmail.com" },
 ]
 dependencies = [
     "numpy>=1.20.0",
-    "pandas>=2.3.3",
+    "polars>=1.41",
     "scipy>=1.17.0",
-    "jax>=0.10.0"
+    "jax>=0.10.0",
+    "equinox>=0.13.8",
 ]
 
 [project.optional-dependencies]
@@ -24,8 +25,7 @@ dev = [
     "pytest-cov",
     "mypy",
     "ruff",
-    "scipy-stubs", 
-    "pandas-stubs",
+    "scipy-stubs>=1.17.0",
     "ipykernel>=7.2.0",
     "matplotlib",
     "rich",
@@ -37,39 +37,44 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-kalman_python = ["py.typed"]  # If you want to include type hints
+kalman_python = ["py.typed"] # If you want to include type hints
 
 [tool.mypy]
-files = ["src"]  # your package name
+files = ["src"]            # your package name
 python_version = "3.13"
-warn_return_any = false  # Too strict for complex covariance union types
+warn_return_any = false    # Too strict for complex covariance union types
 warn_unused_configs = true
 # Allow some flexibility for array indexing and complex union operations
-disable_error_code = ["misc", "call-overload", "index", "assignment"]  # Disable errors for complex numpy/covariance union types that are correct at runtime
+disable_error_code = [
+    "misc",
+    "call-overload",
+    "index",
+    "assignment",
+] # Disable errors for complex numpy/covariance union types that are correct at runtime
 
 [[tool.mypy.overrides]]
 module = "scipy.*"
 ignore_missing_imports = true
 
 [tool.ruff]
-line-length= 100
+line-length = 100
 src = ["src"]
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear (catches real bugs)
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear (catches real bugs)
 ]
 ignore = [
-    "N806", #I don't like making math variables lower case.
-    "N803", #I don't like making math variables lower case.
-    "N801", #I don't like making math variables lower case.
-    "N802", #I don't like making math variables lower case.
+    "N806",   #I don't like making math variables lower case.
+    "N803",   #I don't like making math variables lower case.
+    "N801",   #I don't like making math variables lower case.
+    "N802",   #I don't like making math variables lower case.
     "FBT001", #dumb rule 
     "FBT002", #dumb rule 
 ]

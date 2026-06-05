@@ -291,14 +291,6 @@ class TestCholeskyFactorCovariance:
         assert cov.shape == shape
         assert cov.batch_shape == batch_shape
 
-    def test_init_raises(self):
-        """Tests that __init__ raises ValueErrors for bad shapes."""
-        with pytest.raises(ValueError, match="at least 2-D"):
-            CholeskyFactorCovariance(jnp.array([1.0, 2.0]))
-
-        with pytest.raises(ValueError, match="square matrix"):
-            CholeskyFactorCovariance(jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
-
     def test_variance(self, chol_cov: CholeskyFactorCovariance, P_full: jnp.ndarray):
         """
         Tests the .variance property.
@@ -440,12 +432,6 @@ class TestDiagonalCovariance:
         assert cov.matrix_shape == (dim, dim)
         assert cov.shape == diag_std.shape + (dim,)
         assert cov.batch_shape == diag_std.shape[:-1]
-
-    def test_init_raises(self):
-        """Tests that __init__ raises ValueError for bad shapes."""
-        with pytest.raises(ValueError, match="at least 1-D"):
-            # A 0-D array (scalar)
-            DiagonalCovariance(jnp.array(1.0))
 
     def test_variance(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray):
         """Tests the .variance property."""

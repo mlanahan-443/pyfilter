@@ -174,59 +174,6 @@ def batched_matrix() -> JaxFloatArray:
     )  # Shape (2, 2, 2)
 
 
-# --- Test Classes ---
-
-
-class TestGaussianRVInitialization:
-    """Tests for __init__ and __post_init__ validation."""
-
-    def test_successful_creation(self, grv_2d):
-        assert isinstance(grv_2d, GaussianRV)
-        assert grv_2d.mean.shape == (2,)
-        assert grv_2d.covariance.shape == (2, 2)
-
-    def test_successful_batched_creation(self, grv_batched):
-        assert isinstance(grv_batched, GaussianRV)
-        assert grv_batched.mean.shape == (2, 2)
-        assert grv_batched.covariance.shape == (2, 2, 2)
-
-    def test_fail_mean_ndim_0(self):
-        with pytest.raises(ValueError, match="Mean must have at least 1 dimension"):
-            GaussianRV(jnp.array(1.0), jnp.array([[1.0]]))
-
-    def test_fail_cov_ndim_1(self):
-        with pytest.raises(ValueError, match="Covariance must have at least 2 dimensions"):
-            GaussianRV(jnp.array([1.0]), jnp.array([1.0]))
-
-    def test_fail_cov_not_square(self):
-        with pytest.raises(ValueError, match="Last two dimensions of covariance must be square"):
-            GaussianRV(jnp.array([1.0, 2.0]), jnp.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]))
-
-    def test_fail_mean_cov_dim_mismatch(self):
-        with pytest.raises(ValueError, match="Last dimension of mean .* must match"):
-            GaussianRV(jnp.array([1.0, 2.0]), jnp.array([[1.0]]))  # mean dim 2, cov dim 1
-
-    def test_fail_batch_dim_mismatch(self):
-        key = jax.random.key(45)
-        mean = jax.random.uniform(jax.random.split(key)[1], shape=(3, 2))  # Batch (3,)
-        cov = jax.random.uniform(jax.random.split(key)[1], shape=(4, 2, 2))  # Batch (4,)
-        with pytest.raises(
-            ValueError, match="Batch dimensions of mean .* and covariance .* must match"
-        ):
-            GaussianRV(mean, cov)
-
-    def test_broadcasting_batch_dims(self):
-        """Test successful creation when batch dims broadcast."""
-        key = jax.random.key(45)
-        mean = jax.random.uniform(jax.random.split(key)[1], shape=(1, 3, 2))  # Batch (1, 3)
-        cov = jax.random.uniform(jax.random.split(key)[1], shape=(5, 1, 2, 2))  # Batch (5, 1)
-        # This should fail, as __post_init__ does not broadcast
-        with pytest.raises(
-            ValueError, match="Batch dimensions of mean .* and covariance .* must match"
-        ):
-            GaussianRV(mean, cov)
-
-
 class TestGaussianRVProperties:
     """Tests for shape, len, and repr."""
 

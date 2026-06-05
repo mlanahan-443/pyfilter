@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any
 
+import equinox as eqx
 import jax.scipy
 from jax import numpy as jnp
 
@@ -18,11 +18,10 @@ from ..types.random_variables import GaussianRV
 type Variable = GaussianRV[Any]
 
 
-@dataclass
 class BaseLinearGaussianKalmanFilter[
     StateCovariance: Covariance,
     MeasurementCovariance: Covariance,
-](ABC):
+](eqx.Module, ABC):
     """Base class for linear guassian kalman filter."""
 
     transition_model: LinearTransitionBase[GaussianRV[StateCovariance]]
@@ -75,7 +74,6 @@ class BaseLinearGaussianKalmanFilter[
         return measurement - self.measurement_model @ state_prediction
 
 
-@dataclass
 class LinearGaussianKalman[
     StateCovariance: Covariance,
     MeasurementCovariance: Covariance,

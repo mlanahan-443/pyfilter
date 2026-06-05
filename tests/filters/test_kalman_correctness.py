@@ -100,9 +100,11 @@ class PositionMeasurement(LinearTransformBase):
 class SimpleProcessNoise(ProcessNoise):
     """Simple constant process noise"""
 
-    def __init__(self, covariance: JaxFloatArray | CholeskyFactorCovariance):
-        self._cov = covariance
-        super().__init__(covariance.shape[-2:])
+    _cov: JaxFloatArray | CholeskyFactorCovariance
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._cov.shape
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray | CholeskyFactorCovariance:
         return self._cov

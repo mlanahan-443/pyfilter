@@ -1,5 +1,4 @@
 # _transitions.py
-from dataclasses import dataclass
 from functools import cached_property
 
 import jax
@@ -12,7 +11,6 @@ from pyfilter.types import RandomVariable
 from ._base import LinearTransitionBase
 
 
-@dataclass
 class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[State]):
     r"""Integrator chain transition for p integrators in n spatial dimensions.
 
@@ -59,12 +57,7 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     n: int
     p: int
 
-    def __post_init__(self) -> None:
-        if self.n is None:
-            raise ValueError("n must not be None")
-        if self.p is None:
-            raise ValueError("p must not be None")
-
+    def __check_init__(self):
         if self.n < 1:
             raise ValueError(f"n must be >= 1, got {self.n}")
         if self.p < 1:

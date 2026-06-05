@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from numbers import Number
 from typing import Any, Self, overload, override
 
+import equinox as eqx
 from jax import NamedSharding
 from jax import numpy as jnp
 from jax.scipy.linalg import cho_factor, cho_solve
@@ -32,11 +33,7 @@ def type_error_msg(object: Any) -> str:
     return f"Covariance must be one of: {ALLOWED_TYPES_} not: {type(object)}"
 
 
-CHOL_UFUNC_CACHE_: dict[Callable[..., Any], Callable[..., Any]] = {}
-DIAG_UFUNC_CACHE_: dict[Callable[..., Any], Callable[..., Any]] = {}
-
-
-class CovarianceBase(ABC):
+class CovarianceBase(eqx.Module, ABC):
     """Class for representation of covariances.
 
     The default is to avoid the use of full matrices and instead the cholesky
@@ -44,16 +41,9 @@ class CovarianceBase(ABC):
     performance.
     """
 
-    _UFUNC_CACHE: dict[Callable[..., Any], Callable[..., Any]] = {}
-    # Set higher priority than ndarray to ensure our methods are called first
-    __array_priority__ = 1000
-
-    def __init__(self, matrix_shape: tuple[int, int]):
-        self._matrix_shape = matrix_shape
-
     @property
-    def matrix_shape(self) -> tuple[int, int]:
-        return self._matrix_shape
+    @abstractmethod
+    def matrix_shape(self) -> tuple[int, int]: ...
 
     @property
     def diagonal_indices(self) -> tuple[Any, ...]:
@@ -269,18 +259,6 @@ class CovarianceBase(ABC):
 
         return self.at[index]
 
-    def __array_function__(
-        self,
-        func: Callable[..., Any],
-        types: tuple[type, ...],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-    ) -> CovarianceBase:
-        if func not in self._UFUNC_CACHE:
-            return NotImplemented  # type: ignore[return-value]
-        result: CovarianceBase = self._UFUNC_CACHE[func](*args, **kwargs)
-        return result
-
     @abstractmethod
     def inverse(self) -> JaxFloatArray:
         """The inverse of the covariance matrix."""
@@ -295,18 +273,13 @@ def cholesky_factor(A: JaxFloatArray) -> CholeskyFactorCovariance:
 
 
 class CholeskyFactorCovariance(CovarianceBase):
-    _UFUNC_CACHE = CHOL_UFUNC_CACHE_
     """Nominal covariance type."""
 
-    def __init__(self, L: JaxFloatArray):
-        if L.ndim < 2:
-            raise ValueError("Matrix must be at least 2-D to specify a valid covariance.")
+    _L: JaxFloatArray
 
-        if L.shape[-1] != L.shape[-2]:
-            raise ValueError("Last two dimensions must specify a square matrix.")
-
-        super().__init__((L.shape[-2], L.shape[-1]))
-        self._L = L
+    @property
+    def matrix_shape(self) -> tuple[int, int]:
+        return (self._L.shape[-2], self._L.shape[-1])
 
     def __id__(self) -> tuple[int, int]:
         """Return unique identifier for current state of _L."""
@@ -589,17 +562,14 @@ class CholeskyFactorCovariance(CovarianceBase):
 class DiagonalCovariance(CovarianceBase):
     """Specify a covariance using the standard deviations.
 
-    the standard deviations are used to maintain consistency with CholeskyFactorCovariance.
+    Standard deviations are used to maintain consistency with CholeskyFactorCovariance.
     """
 
-    _UFUNC_CACHE = DIAG_UFUNC_CACHE_
+    _D: JaxFloatArray
 
-    def __init__(self, D: JaxFloatArray):
-        if D.ndim < 1:
-            raise ValueError("Matrix must be at least 1-D to specify a valid diagonal covariance.")
-
-        super().__init__((D.shape[-1], D.shape[-1]))
-        self._D = D
+    @property
+    def matrix_shape(self) -> tuple[int, int]:
+        return (self._D.shape[-1], self._D.shape[-1])
 
     def copy(self) -> DiagonalCovariance:
         return DiagonalCovariance(self._D.copy())

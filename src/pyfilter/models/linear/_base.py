@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Protocol, runtime_checkable
 
+import equinox as eqx
 from jax import numpy as jnp
 from jax.typing import ArrayLike
 
@@ -10,7 +11,7 @@ from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.types import Covariance, RandomVariable
 
 
-class LinearTransformBase[State: RandomVariable](ABC):
+class LinearTransformBase[State: RandomVariable](eqx.Module, ABC):
     @property
     @abstractmethod
     def matrix(self) -> JaxFloatArray:
@@ -33,8 +34,7 @@ class LinearTransformBase[State: RandomVariable](ABC):
 
 
 class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
-    def __init__(self, A: JaxFloatArray):
-        self._A = A
+    _A: JaxFloatArray
 
     @property
     def matrix(self) -> JaxFloatArray:
@@ -54,7 +54,7 @@ class GenericLinearTransform[State: RandomVariable](LinearTransformBase[State]):
         return cov.quadratic_form(self._A)
 
 
-class LinearTransitionBase[State: RandomVariable](ABC):
+class LinearTransitionBase[State: RandomVariable](eqx.Module, ABC):
     """Base linear transition."""
 
     @abstractmethod
@@ -84,8 +84,7 @@ class HasInverseTransform[State: RandomVariable](Protocol):
 
 
 class LTI_Transition[State: RandomVariable](LinearTransitionBase[State]):
-    def __init__(self, A: JaxFloatArray) -> None:
-        self._A = A
+    _A: JaxFloatArray
 
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
         return self._A

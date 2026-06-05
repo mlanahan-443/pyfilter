@@ -19,26 +19,19 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     component axis directly.
     """
 
-    def __init__(self, indices: JaxIntArray | slice, input_dim: int) -> None:
-        if input_dim <= 0:
-            raise ValueError(f"input_dim must be positive, got {input_dim}")
-        self._index_or_slice = indices
-        self._input_dim = input_dim
+    key: JaxIntArray | slice
+    input_dim: int
 
     @property
     def indices(self) -> JaxIntArray:
-        if isinstance(self._index_or_slice, slice):
+        if isinstance(self.key, slice):
             return jnp.arange(
-                self._index_or_slice.start,
-                self._index_or_slice.stop,
-                self._index_or_slice.step,
+                self.key.start,
+                self.key.stop,
+                self.key.step,
             )
 
-        return jnp.asarray(self._index_or_slice).astype(jnp.integer)
-
-    @property
-    def input_dim(self) -> int:
-        return self._input_dim
+        return jnp.asarray(self.key).astype(jnp.integer)
 
     @property
     def output_dim(self) -> int:
@@ -48,19 +41,19 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     @override
     def matrix(self) -> JaxFloatArray:
         """Form the selection matrix explicitly."""
-        return jax.nn.one_hot(self.indices, self._input_dim)
+        return jax.nn.one_hot(self.indices, self.input_dim)
 
     @override
     def transform(self, x: State) -> State:
         """Selection matrix transform."""
-        return x[..., self._index_or_slice]
+        return x[..., self.key]
 
     def transform_array[arrT: ArrayLike](self, x: arrT) -> arrT:
         """Selection into an array."""
-        return x[..., self._index_or_slice]
+        return x[..., self.key]
 
     def transform_covariance[covT: Covariance](self, cov: covT) -> covT:
-        return cov[..., self._index_or_slice, self._index_or_slice]
+        return cov[..., self.key, self.key]
 
 
 class GaussianSelectionTransform(SelectionTransform[GaussianRV]):
@@ -69,4 +62,4 @@ class GaussianSelectionTransform(SelectionTransform[GaussianRV]):
     @override
     def transform(self, x: GaussianRV) -> GaussianRV:
         """Selection for gaussian random variables."""
-        return x.marginal(self._index_or_slice)
+        return x.marginal(self.key)
