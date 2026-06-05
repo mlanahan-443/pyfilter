@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any, Self
 
 import equinox as eqx
@@ -23,7 +22,6 @@ type CovarianceType = CovarianceBase | JaxFloatArray
 type Variable = GaussianRV[Any] | JaxFloatArray | CovarianceBase | float
 
 
-@dataclass
 class GaussianRV[Covariance: CovarianceType](eqx.Module):
     mean: JaxFloatArray
     covariance: Covariance

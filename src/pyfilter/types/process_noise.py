@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from functools import cached_property
 
 import equinox as eqx
@@ -37,7 +36,6 @@ def _full_intensity_matrix(intensity: JaxFloatArray, n: int) -> JaxFloatArray:
     return Q
 
 
-@dataclass
 class WeinerProcessNoise(ProcessNoise):
     r"""
     Generate a discrete process noise model for the continuous time
@@ -153,7 +151,6 @@ class WeinerProcessNoise(ProcessNoise):
         return Qd.reshape((*out_batch, self.state_dim, self.state_dim))
 
 
-@dataclass
 class VanLoanProcessNoise(ProcessNoise):
     r"""Obtain discrete process noise numerically from continuous transition and process noise covariances.
 
