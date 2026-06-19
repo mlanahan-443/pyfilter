@@ -13,6 +13,7 @@ from numpy.testing import assert_allclose
 from pyfilter.filter.linear import LinearGaussianKalman
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
+from pyfilter.types import InformationCovariance
 from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
@@ -108,6 +109,13 @@ class SimpleProcessNoise(ProcessNoise):
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray | CholeskyFactorCovariance:
         return self._cov
+
+    def inverse_covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
+        cov = self.covariance(dt)
+        if isinstance(cov, jnp.ndarray):
+            return jnp.linalg.inv(cov)
+
+        return InformationCovariance(cov.inverse())
 
 
 # ============================================================================

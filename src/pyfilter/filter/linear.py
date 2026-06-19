@@ -1,19 +1,18 @@
 from __future__ import annotations
-
+from pyfilter.linear_solve import solve_symmetric
 from abc import ABC, abstractmethod
 from typing import Any
 
 import equinox as eqx
 import jax.scipy
 from jax import numpy as jnp
-
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types import Covariance, CovarianceBase
 from pyfilter.types.covariance import CholeskyFactorCovariance, InformationCovariance
 
-from ..hints.jax_hints import JaxFloatArray
-from ..types.process_noise import ProcessNoise
-from ..types.random_variables import GaussianRV
+from pyfilter.hints.jax_hints import JaxFloatArray
+from pyfilter.types.process_noise import ProcessNoise
+from pyfilter.types.random_variables import GaussianRV
 
 type Variable = GaussianRV[Any]
 
@@ -72,6 +71,48 @@ class BaseLinearGaussianKalmanFilter[
             Innovation: y = z - H @ x_pred
         """
         return measurement - self.measurement_model @ state_prediction
+    
+    def step_update(
+        self,
+        current_state: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
+        dt: JaxFloatArray
+    ) -> GaussianRV[StateCovariance]:
+        """One step update from current state to next step.
+        
+        This function is useful when used in combination with jax scans.
+
+        Args:
+            current_state: The current state.
+            measurement: The measurement:
+            dt: The difference in time step from the current state to the measurement.
+
+        Returns:
+            The estimated state.
+        """
+        predicted = self.predict(current_state,dt)
+        return self.update(predicted,measurement)
+
+    def step_predict(
+        self,
+        predicted_state: GaussianRV[StateCovariance],
+        measurement: GaussianRV[MeasurementCovariance],
+        dt: JaxFloatArray
+    ) -> GaussianRV[StateCovariance]:
+        """One step prediction from current prediction to next time step.
+        
+        This function is useful when used in combination with jax scans.
+
+        Args:
+            current_state: The predicted state state.
+            measurement: The measurement:
+            dt: The difference in time step from the current state to the measurement.
+
+        Returns:
+            The predicted state at the new time step.
+        """
+        update = self.update(predicted_state,measurement)
+        return self.predict(update,dt)
 
 
 class LinearGaussianKalman[
@@ -155,7 +196,6 @@ class SquareRootLinearGuassianKalman[
         KLS_T = B[..., :m, m:]
         L_post_T = B[..., m:, m:]
 
-        # K via triangular solve (cheap)
         # We have KLS = K @ L_S, so K = KLS @ L_S^(-1)
         # Solve L_S.T @ X.T = KLS.T for X, which gives X = KLS @ L_S^(-1)
         K = jax.scipy.linalg.solve_triangular(L_S_T, KLS_T, lower=False).mT
@@ -175,20 +215,18 @@ class InformationLinearGuassianFilter[
     def predict(
         self, current_state: GaussianRV[StateCovariance], dt: JaxFloatArray
     ) -> GaussianRV[StateCovariance]:
-        """Predict the state forward."""
+        """Predict the state forward for an information filter."""
         Lambda = self.process_noise.inverse_covariance(dt)
         Q_inv = Lambda if isinstance(Lambda, jax.Array) else Lambda.inverse()
-
         F = self.transition_model.matrix(dt)
-        Q_inv_F = Q_inv @ F
+        info = current_state.covariance.inverse()
 
-        # NOTE: this should probably be optimized.
-        I_predict = (
-            Q_inv
-            - Q_inv_F
-            @ jnp.linalg.inv(current_state.covariance.full() + F.mT @ Q_inv @ F)
-            @ Q_inv_F.mT
-        )
+        G = Q_inv @ F
+        S = info + F.mT @ G
+
+        L = jnp.linalg.cholesky(S)
+        W = jax.scipy.linalg.solve_triangular(L, G.mT, lower=True)
+        I_predict = Q_inv - W.mT @ W
 
         x_predict = F @ current_state.mean
 
@@ -199,20 +237,24 @@ class InformationLinearGuassianFilter[
         state_prediction: GaussianRV[StateCovariance],
         measurement: GaussianRV[MeasurementCovariance],
     ) -> GaussianRV[StateCovariance]:
+        """Information-form measurement update."""
+        H = self.measurement_model.matrix  # (m, n)
+        info_pred = state_prediction.covariance.inverse()  # I(k|k-1), (n, n)
 
-        R_inv = measurement.covariance.inverse()
-        H = self.measurement_model.matrix
-        # NOTE: Optimization
-        I_update = state_prediction.covariance.inverse() + H.mT @ R_inv @ H
-
-        # NOTE: Optimization
-        H_T_R_inv = self.measurement_model.matrix.mT @ R_inv
-        gain = jnp.linalg.solve(state_prediction.covariance.inverse(), H_T_R_inv)
-
-        # NOTE: Optimization
-        x_pred = state_prediction.mean
-        x_update = x_pred + gain @ (
-            measurement.mean - self.measurement_model.transform_array(x_pred)
+        L_r = (
+            jax.scipy.linalg.cho_factor(measurement.covariance, lower=True)[0]
+            if isinstance(measurement.covariance, jnp.ndarray)
+            else measurement.covariance.cholesky_factor
         )
+        M = jax.scipy.linalg.cho_solve((L_r, True), H)
+
+        HtRinvH = H.mT @ M
+        I_update = info_pred + HtRinvH
+
+        gain = solve_symmetric(I_update, M.mT)
+
+        x_pred = state_prediction.mean
+        innovation = measurement.mean - self.measurement_model.transform_array(x_pred)
+        x_update = x_pred + gain @ innovation
 
         return GaussianRV(x_update, InformationCovariance(I_update))

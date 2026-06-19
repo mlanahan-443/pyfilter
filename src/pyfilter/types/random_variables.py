@@ -7,7 +7,7 @@ import equinox as eqx
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import ArrayIndex, JaxFloatArray
-from pyfilter.linear_solve import solve_symmetric_cholesky
+from pyfilter.linear_solve import solve_symmetric
 from pyfilter.types.covariance import (
     CovarianceBase,
     cholesky_factor,
@@ -200,16 +200,13 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
 
     def marginal(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """Extract marginal distribution for specified indices."""
-        idx = jnp.atleast_1d(indices)
-        row, col = jnp.ix_(idx, idx)
-        if isinstance(self.covariance, CovarianceBase):
-            if isinstance(indices, slice):
-                mcov = self.covariance[..., indices, indices]
-            else:
-                mcov = self.covariance.at[..., row, col]
-
+        if isinstance(indices, slice):
+            row,col = indices,indices
         else:
-            mcov = self.covariance[..., row, col]
+            idx = jnp.atleast_1d(indices)
+            row, col = jnp.ix_(idx,idx)
+
+        mcov = self.covariance[...,row,col]
 
         return GaussianRV(self.mean[..., indices], mcov)
 
@@ -251,9 +248,7 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
             x2 = jnp.asarray(given_value, dtype=other.mean.dtype)
 
         residual = x2 - other.mean
-        sigma22_inv_residual = solve_symmetric_cholesky(
-            other.covariance, residual[..., jnp.newaxis]
-        )[..., 0]
+        sigma22_inv_residual = solve_symmetric(other.covariance, residual[..., jnp.newaxis])[..., 0]
 
         return self.mean + jnp.einsum("...ij,...j->...i", cross_covariance, sigma22_inv_residual)
 
@@ -312,12 +307,10 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         residual = x2 - other.mean
 
         # Compute Σ22^(-1) @ residual
-        sigma22_inv_residual = solve_symmetric_cholesky(
-            other.covariance, residual[..., jnp.newaxis]
-        )[..., 0]
+        sigma22_inv_residual = solve_symmetric(other.covariance, residual[..., jnp.newaxis])[..., 0]
 
         # Compute Σ22^(-1) @ Σ21
-        sigma22_inv_sigma21 = solve_symmetric_cholesky(other.covariance, cross_covariance.mT)
+        sigma22_inv_sigma21 = solve_symmetric(other.covariance, cross_covariance.mT)
 
         # Compute conditional mean: μ1 + Σ12 @ Σ22^(-1) @ (x2 - μ2)
         conditional_mean = self.mean + jnp.einsum(

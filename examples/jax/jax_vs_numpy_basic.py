@@ -33,7 +33,6 @@ def basic_comparison():
 
 
 def recursive_comparison():
-
     jnp.linalg.solve()
 
 

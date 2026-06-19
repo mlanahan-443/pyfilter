@@ -7,6 +7,7 @@ from jax import numpy as jnp
 from pyfilter.filter.linear import LinearGaussianKalman
 from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
+from pyfilter.types import InformationCovariance
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 import numpy as np
@@ -52,9 +53,12 @@ class MeasurementModel(LinearTransformBase):
 
 
 class ProcessNoiseModel(ProcessNoise):
-    def __init__(self, intensity: float, shape: tuple):
-        super().__init__(shape)
-        self._intensity = intensity
+    intensity: float
+    shape_in: tuple[int, ...]
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self.shape_in
 
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         block = np.empty(dt.shape + (3, 3))
@@ -66,8 +70,11 @@ class ProcessNoiseModel(ProcessNoise):
         block[..., 2, 2] = np.ones_like(dt)
 
         zeros = jnp.zeros_like(block)
-        mat = self._intensity * jnp.block([[block, zeros], [zeros, block]])
+        mat = self.intensity * jnp.block([[block, zeros], [zeros, block]])
         return mat
+
+    def inverse_covariance(self, dt: JaxFloatArray) -> InformationCovariance | JaxFloatArray:
+        return jnp.linalg.inv(self.covariance(dt))
 
 
 @pytest.fixture

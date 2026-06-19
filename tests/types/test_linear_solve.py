@@ -6,15 +6,15 @@ from jax.scipy.linalg import cholesky
 from pyfilter.linear_solve import (
     solve_cholesky_covariance,
     solve_diagonal_covariance,
-    solve_symmetric_cholesky,
-    solve_symmetric_cholesky_dense_array,
+    solve_symmetric,
+    solve_symmetric_dense_array,
 )
 from pyfilter.types.covariance import CholeskyFactorCovariance, DiagonalCovariance
 
 jax.config.update("jax_enable_x64", True)
 
 
-def test_solve_symmetric_cholesky_dense_array():
+def test_solve_symmetric_dense_array():
     """Test that the cholesky solver returns the correct result.
 
     Construct a PSD matrix, and test that this is the same result
@@ -36,7 +36,7 @@ def test_solve_symmetric_cholesky_dense_array():
 
     x_compare = jnp.linalg.solve(A, b)
 
-    x_cholesky = solve_symmetric_cholesky_dense_array(A, b)
+    x_cholesky = solve_symmetric_dense_array(A, b)
 
     np.testing.assert_allclose(
         x_compare,
@@ -108,7 +108,7 @@ def test_solve_diagonal_covariance():
     )
 
 
-def test_solve_symmetric_cholesky():
+def test_solve_symmetric():
     """Test that the solver dispatcher returns the intended result."""
     batch_shape = (100, 10)
     mat_shape = 40
@@ -127,7 +127,7 @@ def test_solve_symmetric_cholesky():
 
     x_compare = jnp.linalg.solve(A, b)
 
-    x_cholesky = solve_symmetric_cholesky(A, b)
+    x_cholesky = solve_symmetric(A, b)
 
     np.testing.assert_allclose(
         x_compare,
@@ -137,7 +137,7 @@ def test_solve_symmetric_cholesky():
 
     L = cholesky(A, lower=True)
     cov = CholeskyFactorCovariance(L)
-    x_cholesky = solve_symmetric_cholesky(cov, b)
+    x_cholesky = solve_symmetric(cov, b)
 
     np.testing.assert_allclose(
         x_compare,
@@ -156,7 +156,7 @@ def test_solve_symmetric_cholesky():
 
     cov = DiagonalCovariance(d**0.5)
 
-    x_cholesky = solve_symmetric_cholesky(cov, b)
+    x_cholesky = solve_symmetric(cov, b)
     np.testing.assert_allclose(
         x_compare,
         x_cholesky,

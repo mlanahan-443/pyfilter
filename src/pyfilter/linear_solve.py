@@ -12,8 +12,7 @@ from pyfilter.types.covariance import (
     solve_diagonal_covariance,
 )
 
-
-def solve_symmetric_cholesky_dense_array(
+def solve_symmetric_dense_array(
     A: JaxFloatArray, B: JaxFloatArray, overwrite_b: bool = False
 ) -> JaxFloatArray:
     """
@@ -44,7 +43,7 @@ def solve_symmetric_cholesky_dense_array(
     return result
 
 
-def solve_symmetric_cholesky(
+def solve_symmetric(
     A: JaxFloatArray | CovarianceBase | DiagonalCovariance | CholeskyFactorCovariance,
     B: JaxFloatArray,
     overwrite_b: bool = False,
@@ -64,7 +63,7 @@ def solve_symmetric_cholesky(
 
     _ALLOWED_TYPES = "FloatingArr,CholeskyFactorCovariance,DiagonalCovariance"
     if isinstance(A, jnp.ndarray):
-        return solve_symmetric_cholesky_dense_array(A, B, overwrite_b=overwrite_b)
+        return solve_symmetric_dense_array(A, B, overwrite_b=overwrite_b)
     elif isinstance(A, CholeskyFactorCovariance):
         return solve_cholesky_covariance(A, B, overwrite_b=overwrite_b)
     elif isinstance(A, DiagonalCovariance):

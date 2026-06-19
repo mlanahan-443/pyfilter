@@ -65,7 +65,6 @@ def numpy_filter[Arr: NDArray[np.floating]](
     R: Arr,
     Q: Arr,
 ) -> tuple[Arr, Arr]:
-
     eye = np.eye(x0.shape[-1])
     x_out = np.empty((z.shape[0] + 1, x0.shape[-1]), dtype=x0.dtype)
     P_out = np.empty((z.shape[0] + 1, *P0.shape[-2:]), dtype=P0.dtype)
@@ -168,7 +167,6 @@ def generate_data(
 
 
 def main():
-
     # Common Setup
     x0 = np.array([1, -10, 1, -0.15, 0.03, 1, 0.001, 0.01, -0.2], dtype=np.float64)
     F = np.array(IntegratorChainTransition(n=3, p=3).matrix(jnp.array(0.5)))
