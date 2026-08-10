@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pyfilter.linear_solve import solve_symmetric
+from pyfilter.types import solve_symmetric
 from abc import ABC, abstractmethod
 from typing import Any
 

@@ -8,6 +8,7 @@ from .covariance import (
     InformationCovariance,
 )
 from .random_variables import GaussianRV
+from .linear_solve import solve_symmetric
 
 type RandomVariable = GaussianRV[Any] | JaxFloatArray
 type Covariance = CovarianceBase | JaxFloatArray
@@ -20,4 +21,5 @@ __all__ = [
     "GaussianRV",
     "Covariance",
     "RandomVariable",
+    "solve_symmetric",
 ]

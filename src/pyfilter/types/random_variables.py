@@ -7,7 +7,7 @@ import equinox as eqx
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import ArrayIndex, JaxFloatArray
-from pyfilter.linear_solve import solve_symmetric
+from .linear_solve import solve_symmetric
 from pyfilter.types.covariance import (
     CovarianceBase,
     cholesky_factor,

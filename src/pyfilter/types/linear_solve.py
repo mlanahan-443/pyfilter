@@ -4,7 +4,7 @@ from jax import numpy as jnp
 from jax.scipy.linalg import cho_solve, cholesky
 
 from pyfilter.hints.jax_hints import JaxFloatArray
-from pyfilter.types.covariance import (
+from .covariance import (
     CholeskyFactorCovariance,
     CovarianceBase,
     DiagonalCovariance,

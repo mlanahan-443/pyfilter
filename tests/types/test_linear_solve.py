@@ -3,7 +3,7 @@ import numpy as np
 from jax import numpy as jnp
 from jax.scipy.linalg import cholesky
 
-from pyfilter.linear_solve import (
+from pyfilter.types.linear_solve import (
     solve_cholesky_covariance,
     solve_diagonal_covariance,
     solve_symmetric,

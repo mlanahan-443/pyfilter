@@ -68,7 +68,7 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         """Total dimension of the state vector ($n \\cdot p$)."""
         return self.n * self.p
 
-    @cached_property
+    @property
     def _temporal_factors(self) -> tuple[JaxBoolArray, JaxFloatArray, JaxFloatArray]:
         """Precompute index structure of the temporal matrix T.
 
@@ -88,7 +88,7 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
         inv_factorial = 1.0 / factorials[lag_safe]
         return valid, lag_safe, inv_factorial
 
-    @cached_property
+    @property
     def _eye_n(self) -> JaxFloatArray:
         """Cached ``np.eye(n)`` for the Kronecker product."""
         return jnp.eye(self.n)
