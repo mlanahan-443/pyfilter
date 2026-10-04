@@ -7,12 +7,13 @@ import equinox as eqx
 from jax import numpy as jnp
 
 from pyfilter.hints.jax_hints import ArrayIndex, JaxFloatArray
-from .linear_solve import solve_symmetric
 from pyfilter.types.covariance import (
     CovarianceBase,
     cholesky_factor,
     linear_cross_covariance,
 )
+
+from .linear_solve import solve_symmetric
 
 CHOLESK_SYMN_ = {"chofactor", "cho", "cholesky", "square-root"}
 ARRAY_SYMN_ = {"array", "np.ndarray", "JaxFloatArray", "Array"}
@@ -201,12 +202,12 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
     def marginal(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """Extract marginal distribution for specified indices."""
         if isinstance(indices, slice):
-            row,col = indices,indices
+            row, col = indices, indices
         else:
             idx = jnp.atleast_1d(indices)
-            row, col = jnp.ix_(idx,idx)
+            row, col = jnp.ix_(idx, idx)
 
-        mcov = self.covariance[...,row,col]
+        mcov = self.covariance[..., row, col]
 
         return GaussianRV(self.mean[..., indices], mcov)
 

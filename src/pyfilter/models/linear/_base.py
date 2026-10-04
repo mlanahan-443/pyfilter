@@ -62,6 +62,10 @@ class LinearTransitionBase[State: RandomVariable](eqx.Module, ABC):
         """Transform the state x(k) -> x(k+1)"""
 
     @abstractmethod
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
+        """Apply the transformation to an array."""
+
+    @abstractmethod
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray: ...
 
 
@@ -93,6 +97,9 @@ class LTI_Transition[State: RandomVariable](LinearTransitionBase[State]):
         return self._A
 
     def transform(self, x: State, dt: JaxFloatArray) -> State:
+        return self._A @ x
+
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
         return self._A @ x
 
     def inverse(self, dt: JaxFloatArray) -> JaxFloatArray:

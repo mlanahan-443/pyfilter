@@ -1,16 +1,16 @@
 from __future__ import annotations
-from pyfilter.types import solve_symmetric
+
 from abc import ABC, abstractmethod
 from typing import Any
 
 import equinox as eqx
 import jax.scipy
 from jax import numpy as jnp
-from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
-from pyfilter.types import Covariance, CovarianceBase
-from pyfilter.types.covariance import CholeskyFactorCovariance, InformationCovariance
 
 from pyfilter.hints.jax_hints import JaxFloatArray
+from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
+from pyfilter.types import Covariance, CovarianceBase, solve_symmetric
+from pyfilter.types.covariance import CholeskyFactorCovariance, InformationCovariance
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 
@@ -71,15 +71,15 @@ class BaseLinearGaussianKalmanFilter[
             Innovation: y = z - H @ x_pred
         """
         return measurement - self.measurement_model @ state_prediction
-    
+
     def step_update(
         self,
         current_state: GaussianRV[StateCovariance],
         measurement: GaussianRV[MeasurementCovariance],
-        dt: JaxFloatArray
+        dt: JaxFloatArray,
     ) -> GaussianRV[StateCovariance]:
         """One step update from current state to next step.
-        
+
         This function is useful when used in combination with jax scans.
 
         Args:
@@ -90,17 +90,17 @@ class BaseLinearGaussianKalmanFilter[
         Returns:
             The estimated state.
         """
-        predicted = self.predict(current_state,dt)
-        return self.update(predicted,measurement)
+        predicted = self.predict(current_state, dt)
+        return self.update(predicted, measurement)
 
     def step_predict(
         self,
         predicted_state: GaussianRV[StateCovariance],
         measurement: GaussianRV[MeasurementCovariance],
-        dt: JaxFloatArray
+        dt: JaxFloatArray,
     ) -> GaussianRV[StateCovariance]:
         """One step prediction from current prediction to next time step.
-        
+
         This function is useful when used in combination with jax scans.
 
         Args:
@@ -111,8 +111,8 @@ class BaseLinearGaussianKalmanFilter[
         Returns:
             The predicted state at the new time step.
         """
-        update = self.update(predicted_state,measurement)
-        return self.predict(update,dt)
+        update = self.update(predicted_state, measurement)
+        return self.predict(update, dt)
 
 
 class LinearGaussianKalman[

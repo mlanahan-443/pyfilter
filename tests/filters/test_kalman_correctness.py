@@ -42,6 +42,9 @@ class IdentityTransition(LinearTransitionBase):
     def transform(self, x: GaussianRV, dt: JaxFloatArray) -> GaussianRV:
         return x
 
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
+        return x
+
 
 class IdentityMeasurement(LinearTransformBase):
     """Simple identity measurement: z = x"""
@@ -75,6 +78,9 @@ class ConstantVelocityTransition(LinearTransitionBase):
         return jnp.linalg.inv(self.matrix(dt))
 
     def transform(self, x: GaussianRV, dt: JaxFloatArray) -> GaussianRV:
+        return self.matrix(dt) @ x
+
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
         return self.matrix(dt) @ x
 
 

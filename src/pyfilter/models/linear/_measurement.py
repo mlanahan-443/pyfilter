@@ -1,12 +1,13 @@
 from typing import override
 
+import equinox as eqx
 import jax
 from jax import numpy as jnp
 from jax.typing import ArrayLike
 
 from pyfilter.hints.jax_hints import JaxFloatArray, JaxIntArray
 from pyfilter.types import Covariance, GaussianRV, RandomVariable
-import equinox as eqx
+
 from ._base import LinearTransformBase
 
 
@@ -19,7 +20,7 @@ class SelectionTransform[State: RandomVariable](LinearTransformBase[State]):
     component axis directly.
     """
 
-    key: JaxIntArray | slice = eqx.field(static = True)
+    key: JaxIntArray | slice = eqx.field(static=True)
     input_dim: int
 
     @property

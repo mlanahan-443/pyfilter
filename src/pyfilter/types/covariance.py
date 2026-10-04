@@ -507,19 +507,22 @@ class CholeskyFactorCovariance(CovarianceBase):
         result: JaxFloatArray = jnp.einsum("...ik,...jk->...ij", self._L, self._L)
         return result
 
-    def _is_safe_matrix_slice(self, items: tuple[slice, ...]) -> bool:
+    def _is_safe_matrix_slice(self, matrix_indexer: tuple[IndexItem, ...]) -> bool:
         """
         Determines if a matrix index preserves the triangular structure of L.
         Safe: slice(None), slice(0, k, 1)
         Unsafe: slice(1, k), [0, 1], etc.
         """
-        if len(items) != 2:
+        if any([not isinstance(item, slice) for item in matrix_indexer]):
             return False
 
-        if items[0] != items[1]:
+        if len(matrix_indexer) != 2:
             return False
 
-        item = items[0]
+        if matrix_indexer[0] != matrix_indexer[1]:
+            return False
+
+        item = matrix_indexer[0]
         start_safe = item.start is None or item.start == 0
         step_safe = item.step is None or item.step == 1
         return start_safe and step_safe
@@ -998,15 +1001,24 @@ class DiagonalCovariance(CovarianceBase):
         """
         row_idx, col_idx = matrix_indexer
 
-        # Simple equality check: are we asking for the same rows as cols?
-        return row_idx == col_idx
+        if type(row_idx) != type(col_idx):
+            return False
+
+        if isinstance(row_idx, slice) and isinstance(col_idx, slice):
+            return row_idx == col_idx
+
+        return bool(jnp.all(row_idx == col_idx))
 
     def _apply_fast_matrix_slice(
         self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
     ) -> DiagonalCovariance:
         # self._D is shape (Batch..., Dim)
         # matrix_idx passed from parent is (row_idx, col_idx)
-        diag_idx = matrix_idx[0]
+        diag_idx = (
+            jnp.atleast_1d(matrix_idx[0].squeeze())
+            if isinstance(matrix_idx[0], jnp.ndarray)
+            else matrix_idx[0]
+        )
 
         full_index = batch_idx + (diag_idx,)
 

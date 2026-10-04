@@ -4,6 +4,7 @@ from jax import numpy as jnp
 from jax.scipy.linalg import cho_solve, cholesky
 
 from pyfilter.hints.jax_hints import JaxFloatArray
+
 from .covariance import (
     CholeskyFactorCovariance,
     CovarianceBase,
@@ -11,6 +12,7 @@ from .covariance import (
     solve_cholesky_covariance,
     solve_diagonal_covariance,
 )
+
 
 def solve_symmetric_dense_array(
     A: JaxFloatArray, B: JaxFloatArray, overwrite_b: bool = False

@@ -7,8 +7,8 @@ from .covariance import (
     DiagonalCovariance,
     InformationCovariance,
 )
-from .random_variables import GaussianRV
 from .linear_solve import solve_symmetric
+from .random_variables import GaussianRV
 
 type RandomVariable = GaussianRV[Any] | JaxFloatArray
 type Covariance = CovarianceBase | JaxFloatArray

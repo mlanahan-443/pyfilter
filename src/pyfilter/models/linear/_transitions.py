@@ -1,5 +1,4 @@
 # _transitions.py
-from functools import cached_property
 
 import jax
 import jax.scipy.special
@@ -134,6 +133,18 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
 
         Args:
             x: State (deterministic vector or random variable).
+            dt: Timestep, broadcastable with any leading batch dims of ``x``.
+
+        Returns:
+            The propagated state.
+        """
+        return self.matrix(dt) @ x
+
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
+        """Apply the linear transition to the array ``x``.
+
+        Args:
+            x: Array variable.
             dt: Timestep, broadcastable with any leading batch dims of ``x``.
 
         Returns:
