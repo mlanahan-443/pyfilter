@@ -28,9 +28,7 @@ class TestConstruction:
 class TestAgainstExpm:
     """The closed form should match expm(A*dt) to ~machine precision."""
 
-    @pytest.mark.parametrize(
-        "n,p", [(1, 2), (2, 2), (3, 2), (1, 3), (2, 3), (3, 3), (1, 4), (2, 4)]
-    )
+    @pytest.mark.parametrize("n,p", [(1, 2), (2, 2), (3, 2), (1, 3), (2, 3), (3, 3), (1, 4), (2, 4)])
     @pytest.mark.parametrize("dt", [0.1, 1.0, 5.0])
     def test_phi_matches_expm(self, n: int, p: int, dt: float) -> None:
         chain = IntegratorChainTransition(n=n, p=p)

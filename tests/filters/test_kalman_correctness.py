@@ -166,11 +166,7 @@ class TestKalmanFilter1D:
         updated = simple_filter.update(state, measurement)
 
         assert_allclose(updated.mean, jnp.array([7.0 / 3.0]), rtol=1e-10)
-        cov = (
-            updated.covariance
-            if isinstance(updated.covariance, jnp.ndarray)
-            else updated.covariance.full()
-        )
+        cov = updated.covariance if isinstance(updated.covariance, jnp.ndarray) else updated.covariance.full()
         assert_allclose(cov, jnp.array([[2.0 / 3.0]]), rtol=1e-10)
 
     def test_multiple_updates_sequence(self, simple_filter):
@@ -195,11 +191,7 @@ class TestKalmanFilter1D:
         assert state.mean[0] < 4.0  # But not overshoot
 
         # Variance should decrease after measurements
-        cov = (
-            state.covariance
-            if isinstance(state.covariance, jnp.ndarray)
-            else state.covariance.full()
-        )
+        cov = state.covariance if isinstance(state.covariance, jnp.ndarray) else state.covariance.full()
         assert cov[0, 0] < 1.0  # Should be less than measurement variance
 
 
@@ -267,11 +259,7 @@ class TestKalmanFilter2D:
         assert_allclose(state.mean[1], 10.0, atol=2.0)
 
         # Uncertainty should be reduced
-        cov = (
-            state.covariance
-            if isinstance(state.covariance, jnp.ndarray)
-            else state.covariance.full()
-        )
+        cov = state.covariance if isinstance(state.covariance, jnp.ndarray) else state.covariance.full()
         assert cov[0, 0] < 10.0  # Position variance reduced
         assert cov[1, 1] < 5.0  # Velocity variance reduced
 

@@ -51,7 +51,6 @@ def smooth_fp(
         tuple[JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray],
         tuple[JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray],
     ]:
-
         x_s, x_prev, P_prev, Pi_prev, Sigma_prev = state
         z, R, Q = carry
 
@@ -123,7 +122,6 @@ def smooth_fp_efficient(
         tuple[JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray],
         tuple[JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray, JaxFloatArray],
     ]:
-
         x_s, x_prev, P_prev, Pi_prev, Sigma_prev = state
         z, R, Q = carry
 
@@ -168,14 +166,12 @@ def smooth_fp_grv(
     transition_model: LinearTransitionBase,
     process_noise: ProcessNoise,
 ) -> tuple[JaxFloatArray, JaxFloatArray]:
-
     def _step(
         state: tuple[GaussianRV, GaussianRV, JaxFloatArray], carry: tuple[GaussianRV, JaxFloatArray]
     ) -> tuple[
         tuple[GaussianRV, GaussianRV, JaxFloatArray],
         tuple[GaussianRV, GaussianRV, JaxFloatArray],
     ]:
-
         x_smoothed, x_prev, Sigma_prev = state
         z, dt = carry
 
@@ -224,14 +220,11 @@ def smooth_fp_grv(
     _, result = jax.lax.scan(_step, init_state, carry)
 
     mean = jnp.concatenate([x_init.mean[jnp.newaxis, ...], result[0].mean], axis=0)
-    covariance = jnp.concatenate(
-        [x_init.covariance[jnp.newaxis, ...], result[0].covariance], axis=0
-    )
+    covariance = jnp.concatenate([x_init.covariance[jnp.newaxis, ...], result[0].covariance], axis=0)
     return mean, covariance
 
 
 def main():
-
     meas_model = GaussianSelectionTransform(slice(0, 1), 2)
     H = meas_model.matrix
     x0 = jnp.array([0.0, -1.0])
@@ -308,9 +301,7 @@ def main():
     ax.plot(steps, lower / error_mean[0], lw=0.75, color="red")
     ax.fill_between(steps, lower / error_mean[0], upper / error_mean[0], alpha=0.2, color="red")
     ax.plot(steps, tr_P / tr_P[0], lw=1.5, color="k", label=r"$tr(P)$")
-    ax.plot(
-        steps, cov_improvement, lw=1.5, color="k", ls="--", label=r"$tr(P - P_{smoothed})/tr(P)$"
-    )
+    ax.plot(steps, cov_improvement, lw=1.5, color="k", ls="--", label=r"$tr(P - P_{smoothed})/tr(P)$")
 
     ax.set_xlabel("Time Steps", fontsize=12)
     ax.set_ylabel("Normalized Estimate Errors (Actual, Estimated)", fontsize=12)

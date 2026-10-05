@@ -27,7 +27,6 @@ def diagnostic(
     P_update: JaxFloatArray,
     F: JaxFloatArray,
 ):
-
     N = len(x_pred)
 
     k = N // 2
@@ -79,7 +78,6 @@ def smooth_rts(
 
 
 def main():
-
     meas_model = GaussianSelectionTransform(slice(0, 1), 2)
     H = meas_model.matrix
     x0 = jnp.array([0.0, -1.0])
@@ -134,7 +132,8 @@ def main():
         [trace_cov_s, trace_cov_f],
         ["red", "black"],
         ["-", "--"],
-        labels, strict=False,
+        labels,
+        strict=False,
     ):
         error_arr = jnp.concatenate(estimation_error, axis=0)
         tr_arr = jnp.concatenate(trace_cov, axis=0)

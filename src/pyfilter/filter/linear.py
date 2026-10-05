@@ -63,11 +63,16 @@ class BaseLinearGaussianKalmanFilter[
     ) -> GaussianRV[StateCovariance]:
         """Compute the measurement innovation (residual).
 
-        Args:
-            state_prediction: Prior state distribution
-            measurement: Observed measurement distribution
+        Parameters
+        ----------
+        state_prediction : GaussianRV[StateCovariance]
+            Prior state distribution
+        measurement : GaussianRV[MeasurementCovariance]
+            Observed measurement distribution
 
-        Returns:
+        Returns
+        -------
+        GaussianRV[StateCovariance]
             Innovation: y = z - H @ x_pred
         """
         return measurement - self.measurement_model @ state_prediction
@@ -82,12 +87,18 @@ class BaseLinearGaussianKalmanFilter[
 
         This function is useful when used in combination with jax scans.
 
-        Args:
-            current_state: The current state.
-            measurement: The measurement:
-            dt: The difference in time step from the current state to the measurement.
+        Parameters
+        ----------
+        current_state : GaussianRV[StateCovariance]
+            The current state.
+        measurement : GaussianRV[MeasurementCovariance]
+            The measurement:
+        dt : JaxFloatArray
+            The difference in time step from the current state to the measurement.
 
-        Returns:
+        Returns
+        -------
+        GaussianRV[StateCovariance]
             The estimated state.
         """
         predicted = self.predict(current_state, dt)
@@ -103,12 +114,18 @@ class BaseLinearGaussianKalmanFilter[
 
         This function is useful when used in combination with jax scans.
 
-        Args:
-            current_state: The predicted state state.
-            measurement: The measurement:
-            dt: The difference in time step from the current state to the measurement.
+        Parameters
+        ----------
+        predicted_state : GaussianRV[StateCovariance]
+            The predicted state state.
+        measurement : GaussianRV[MeasurementCovariance]
+            The measurement:
+        dt : JaxFloatArray
+            The difference in time step from the current state to the measurement.
 
-        Returns:
+        Returns
+        -------
+        GaussianRV[StateCovariance]
             The predicted state at the new time step.
         """
         update = self.update(predicted_state, measurement)
@@ -136,12 +153,17 @@ class LinearGaussianKalman[
 
         We compute x | z using the conditional distribution of the joint (x, z).
 
-        Args:
-            state_prediction: Prior state distribution x ~ N(x_pred, P)
-            innovation: Innovation distribution y ~ N(y_obs, S) where S = H @ P @ H.T + R
-                       The mean is the observed innovation y_obs = z_obs - H @ x_pred
+        Parameters
+        ----------
+        state_prediction : GaussianRV[StateCovariance]
+            Prior state distribution x ~ N(x_pred, P)
+        measurement : GaussianRV[MeasurementCovariance]
+            Innovation distribution y ~ N(y_obs, S) where S = H @ P @ H.T + R
+            The mean is the observed innovation y_obs = z_obs - H @ x_pred
 
-        Returns:
+        Returns
+        -------
+        GaussianRV[Any]
             Posterior state distribution x | z ~ N(x_post, P_post)
         """
         # Compute cross-covariance: Cov(x, z) = P @ H.T
@@ -158,25 +180,23 @@ class LinearGaussianKalman[
 
 
 class SquareRootLinearGuassianKalman[
-    StateCovariance: CholeskyFactorCovariance,
     MeasurementCovariance: CovarianceBase,
-](BaseLinearGaussianKalmanFilter[StateCovariance, MeasurementCovariance]):
+](BaseLinearGaussianKalmanFilter[CholeskyFactorCovariance, MeasurementCovariance]):
     """Implements the square root filter.
 
     This filter maintains the covariance of the state as a cholesky factor, vs. the full covariance matrix.
     This allows for a more efficient update step using a QR decomposition, at the expense of more
     expensive prediction + other steps.
 
-    The measurement covariance must be specified as a covariance type so the cholesky factor can be efficiently
-    computed.
-
+    The measurement covariance must be specified as a covariance type so the cholesky factor can be
+    efficiently computed.
     """
 
     def update(
         self,
-        state_prediction: GaussianRV[StateCovariance],
+        state_prediction: GaussianRV[CholeskyFactorCovariance],
         measurement: GaussianRV[MeasurementCovariance],
-    ) -> GaussianRV[StateCovariance]:
+    ) -> GaussianRV[CholeskyFactorCovariance]:
         innovation = self.innovation(state_prediction, measurement)
         L_pred = state_prediction.covariance.cholesky_factor  # (n, n)
         L_R = measurement.covariance.cholesky_factor
@@ -185,9 +205,7 @@ class SquareRootLinearGuassianKalman[
         # Pre-array (supports batching via leading dims)
         HL = self.measurement_model.matrix @ L_pred  # (..., m, n)
         top = jnp.concatenate([L_R, HL], axis=-1)  # (..., m, m+n)
-        bottom = jnp.concatenate(
-            [jnp.zeros((*L_pred.shape[:-2], n, m)), L_pred], axis=-1
-        )  # (..., n, m+n)
+        bottom = jnp.concatenate([jnp.zeros((*L_pred.shape[:-2], n, m)), L_pred], axis=-1)  # (..., n, m+n)
         A = jnp.concatenate([top, bottom], axis=-2)  # (..., m+n, m+n)
 
         B = jnp.linalg.qr(A.mT, mode="reduced").R  # upper-tri (..., m+n, m+n)
@@ -207,14 +225,13 @@ class SquareRootLinearGuassianKalman[
 
 
 class InformationLinearGuassianFilter[
-    StateCovariance: InformationCovariance,
     MeasurementCovariance: CovarianceBase,
-](BaseLinearGaussianKalmanFilter[StateCovariance, MeasurementCovariance]):
+](BaseLinearGaussianKalmanFilter[InformationCovariance, MeasurementCovariance]):
     """Information filter implementation (placeholder for future development)."""
 
     def predict(
-        self, current_state: GaussianRV[StateCovariance], dt: JaxFloatArray
-    ) -> GaussianRV[StateCovariance]:
+        self, current_state: GaussianRV[InformationCovariance], dt: JaxFloatArray
+    ) -> GaussianRV[InformationCovariance,]:
         """Predict the state forward for an information filter."""
         Lambda = self.process_noise.inverse_covariance(dt)
         Q_inv = Lambda if isinstance(Lambda, jax.Array) else Lambda.inverse()
@@ -234,9 +251,9 @@ class InformationLinearGuassianFilter[
 
     def update(
         self,
-        state_prediction: GaussianRV[StateCovariance],
+        state_prediction: GaussianRV[InformationCovariance],
         measurement: GaussianRV[MeasurementCovariance],
-    ) -> GaussianRV[StateCovariance]:
+    ) -> GaussianRV[InformationCovariance]:
         """Information-form measurement update."""
         H = self.measurement_model.matrix  # (m, n)
         info_pred = state_prediction.covariance.inverse()  # I(k|k-1), (n, n)

@@ -1,7 +1,7 @@
-numpy>=1.20.0
-polars>=1.41
-scipy>=1.17.0
-jax>=0.10.0
+numpy>=2.5.0
+polars>=1.44
+scipy>=1.18.0
+jax>=0.11.0
 equinox>=0.13.8
 
 [dev]
@@ -15,3 +15,9 @@ matplotlib
 rich
 numba
 jaxtyping
+
+[docs]
+sphinx>=9.0
+numpydoc>=1.11
+pydata-sphinx-theme
+sphinx-autodoc-typehints

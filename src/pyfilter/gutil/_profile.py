@@ -237,15 +237,21 @@ class ProfileReport(ProfileReportBase):
     Configure once at construction and pass to :class:`Profiler` to
     control the format of all of its results.
 
-    Args:
-        time_unit: Display unit. ``"auto"`` (default) picks based on the best
-                per-call time so the values stay legible.
-        precision: Decimal places for time formatting.
-        show_percentiles: Include p25/p75/p95 rows when at least four repeats are
-                        available.
-        use_color: Emit ANSI colour codes in :meth:`render` (default ``True``).
-                    Disable for plain-text logs / files.
-        width: Optional fixed console width; ``None`` lets rich auto-size.
+    Parameters
+    ----------
+    time_unit : TimeUnit | Literal["auto"]
+        Display unit. ``"auto"`` (default) picks based on the best
+        per-call time so the values stay legible.
+    precision : int
+        Decimal places for time formatting.
+    show_percentiles : bool
+        Include p25/p75/p95 rows when at least four repeats are
+        available.
+    use_color : bool
+        Emit ANSI colour codes in :meth:`render` (default ``True``).
+        Disable for plain-text logs / files.
+    width : int | None
+        Optional fixed console width; ``None`` lets rich auto-size.
     """
 
     def __init__(
@@ -433,18 +439,27 @@ class LineProfiler:
     ) -> Self:
         """Time ``fn`` with :mod:`timeit` semantics.
 
-        Args:
-            fn: Nullary callable to time.
-            number: Loops per measurement. When ``None``, :meth:`autorange`
-                    picks a value that yields at least 0.2 s per measurement,
-                    matching :meth:`timeit.Timer.autorange`.
-            repeat: Number of independent measurements.
-            setup: Optional callable invoked once before each repeat.
-            disable_gc: Pause cyclic GC during each measurement (default ``True``,
-                matching :mod:`timeit`).
-            clear: Discard any previously-recorded samples before timing.
+        Parameters
+        ----------
+        fn : TimedFn
+            Nullary callable to time.
+        number : int | None
+            Loops per measurement. When ``None``, :meth:`autorange`
+            picks a value that yields at least 0.2 s per measurement,
+            matching :meth:`timeit.Timer.autorange`.
+        repeat : int
+            Number of independent measurements.
+        setup : SetupFn | None
+            Optional callable invoked once before each repeat.
+        disable_gc : bool
+            Pause cyclic GC during each measurement (default ``True``,
+            matching :mod:`timeit`).
+        clear : bool
+            Discard any previously-recorded samples before timing.
 
-        Returns:
+        Returns
+        -------
+        Self
             Profiler
 
         """
@@ -486,7 +501,9 @@ class LineProfiler:
     ) -> tuple[int, float]:
         """Pick ``number`` such that timing ``fn`` takes >= ``min_time`` s.
 
-        Returns:
+        Returns
+        -------
+        tuple[int, float]
             The chosen ``number`` and the elapsed time of the run that
             crossed the threshold.
         """
@@ -518,8 +535,7 @@ class LineProfiler:
 
     def __repr__(self) -> str:
         return (
-            f"{type(self).__name__}(name={self._name!r}, "
-            f"n_repeats={len(self._times)}, number={self._number})"
+            f"{type(self).__name__}(name={self._name!r}, n_repeats={len(self._times)}, number={self._number})"
         )
 
     def __rich__(self) -> RenderableType:

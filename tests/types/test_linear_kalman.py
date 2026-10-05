@@ -222,9 +222,7 @@ def test_square_root_kalman_basic():
     measurement_model = GenericLinearTransform(jnp.array(H))
 
     # Create square root filter
-    sq_kalman_filter = SquareRootLinearGuassianKalman(
-        transition_model, process_noise, measurement_model
-    )
+    sq_kalman_filter = SquareRootLinearGuassianKalman(transition_model, process_noise, measurement_model)
 
     # Generate random measurements
     num_steps = 10
@@ -396,9 +394,7 @@ def test_information_kalman_vs_standard():
 
     # Create both filters
     standard_filter = LinearGaussianKalman(transition_model, process_noise, measurement_model)
-    info_filter = InformationLinearGuassianFilter(
-        transition_model, process_noise, measurement_model
-    )
+    info_filter = InformationLinearGuassianFilter(transition_model, process_noise, measurement_model)
 
     # Run both filters
 
@@ -412,9 +408,7 @@ def test_information_kalman_vs_standard():
 
         # Verify predictions match
         np.testing.assert_allclose(pred_standard.mean, pred_info.mean, rtol=1e-10)
-        np.testing.assert_allclose(
-            pred_standard.covariance, pred_info.covariance.full(), rtol=1e-10
-        )
+        np.testing.assert_allclose(pred_standard.covariance, pred_info.covariance.full(), rtol=1e-10)
 
         # Generate measurement
         meas_val = jax.random.uniform(key=jax.random.key(43), shape=(4,))
@@ -428,9 +422,7 @@ def test_information_kalman_vs_standard():
 
         # Verify updates match
         np.testing.assert_allclose(state_standard.mean, state_info.mean, rtol=1e-8)
-        np.testing.assert_allclose(
-            state_standard.covariance, state_info.covariance.full(), rtol=1e-8
-        )
+        np.testing.assert_allclose(state_standard.covariance, state_info.covariance.full(), rtol=1e-8)
 
 
 def test_square_root_kalman_innovation():
@@ -509,9 +501,7 @@ def test_innovation_consistency():
     np.testing.assert_allclose(innov_standard.mean, innov_sq.mean, rtol=1e-10)
     # Compare covariance values (handle different representations)
     innov_sq_cov = (
-        innov_sq.covariance
-        if isinstance(innov_sq.covariance, jnp.ndarray)
-        else innov_sq.covariance.full()
+        innov_sq.covariance if isinstance(innov_sq.covariance, jnp.ndarray) else innov_sq.covariance.full()
     )
     innov_standard_cov = (
         innov_standard.covariance

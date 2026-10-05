@@ -55,8 +55,8 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
             # For array operations, check if broadcasting is valid
             try:
                 jnp.broadcast_shapes(self.mean.shape, other.shape)
-            except ValueError:
-                raise ValueError(f"Cannot broadcast shapes {self.mean.shape} and {other.shape}")
+            except ValueError as ve:
+                raise ValueError(f"Cannot broadcast shapes {self.mean.shape} and {other.shape}") from ve
         elif isinstance(other, CovarianceBase):
             if other.matrix_shape != self.covariance.shape[:-2]:
                 raise ValueError(
@@ -140,7 +140,8 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
                 return GaussianRV(self.mean * other, self.covariance * cov_scale)
             else:
                 raise TypeError(
-                    "If gaussian random variable has a Covariance class covariance, then only elementwise multiplication with scalrs is allowed."
+                    "If gaussian random variable has a Covariance class covariance, \
+                        then only elementwise multiplication with scalrs is allowed."
                 )
 
         else:  # matrix multiplication
@@ -185,16 +186,21 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
             if isinstance(self.covariance, jnp.ndarray)
             else self.covariance.trace()
         )
-        return f"GaussianRV(shape={self.shape}, mean_norm={jnp.linalg.norm(self.mean):.3f}, cov_trace={trace})"
+        return f"GaussianRV(shape={self.shape}, \
+            mean_norm={jnp.linalg.norm(self.mean):.3f}, cov_trace={trace})"
 
     def __getitem__(self, indices: ArrayIndex) -> GaussianRV[Any]:
         """General indexing
 
-        Args:
-            indices (ArrayIndex): An index.
+        Parameters
+        ----------
+        indices : ArrayIndex
+            An index.
 
-        Returns:
-            GaussianRV: The requested index of the guassian random variable.
+        Returns
+        -------
+        GaussianRV
+            The requested index of the guassian random variable.
         """
 
         return GaussianRV(self.mean[indices], self.covariance[indices])
@@ -232,14 +238,20 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         .. math::
             \mu_1|2 = \mu_1 + \Sigma_{12} @ \Sigma{22}^(-1) @ (x_2 - \mu_2)
 
-        Args:
-            other: The GaussianRV to condition on (X2)
-            cross_covariance: Cross-covariance matrix Σ12 with shape (..., n1, n2)
-                            where n1 = len(self) and n2 = len(other)
-            given_value: The value to condition on. If None, uses other.mean
-                        Shape should be compatible with other.mean
+        Parameters
+        ----------
+        other : GaussianRV[Any]
+            The GaussianRV to condition on (X2)
+        cross_covariance : JaxFloatArray
+            Cross-covariance matrix Σ12 with shape (..., n1, n2)
+            where n1 = len(self) and n2 = len(other)
+        given_value : JaxFloatArray | None
+            The value to condition on. If None, uses other.mean
+            Shape should be compatible with other.mean
 
-        Returns:
+        Returns
+        -------
+        JaxFloatArray
             The conditional mean of X1|X2=given_value
         """
 
@@ -276,15 +288,21 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         - μ1|2 = μ1 + Σ12 @ Σ22^(-1) @ (x2 - μ2)
         - Σ1|2 = Σ11 - Σ12 @ Σ22^(-1) @ Σ21
 
-        Args:
-            other: The GaussianRV to condition on (X2)
-            cross_covariance: Cross-covariance matrix Σ12 with shape (..., n1, n2)
-                            where n1 = len(self) and n2 = len(other)
-            given_value: The value to condition on. If None, uses other.mean
-                        Shape should be compatible with other.mean
+        Parameters
+        ----------
+        other : GaussianRV[Any]
+            The GaussianRV to condition on (X2)
+        cross_covariance : JaxFloatArray
+            Cross-covariance matrix Σ12 with shape (..., n1, n2)
+            where n1 = len(self) and n2 = len(other)
+        given_value : JaxFloatArray | None
+            The value to condition on. If None, uses other.mean
+            Shape should be compatible with other.mean
 
-        Returns:
-            GaussianRV: The conditional distribution X1|X2=given_value
+        Returns
+        -------
+        GaussianRV
+            The conditional distribution X1|X2=given_value
         """
         # Validate inputs
         cross_covariance = jnp.asarray(cross_covariance, dtype=self.mean.dtype)
@@ -314,9 +332,7 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         sigma22_inv_sigma21 = solve_symmetric(other.covariance, cross_covariance.mT)
 
         # Compute conditional mean: μ1 + Σ12 @ Σ22^(-1) @ (x2 - μ2)
-        conditional_mean = self.mean + jnp.einsum(
-            "...ij,...j->...i", cross_covariance, sigma22_inv_residual
-        )
+        conditional_mean = self.mean + jnp.einsum("...ij,...j->...i", cross_covariance, sigma22_inv_residual)
 
         # Compute conditional covariance: Σ11 - Σ12 @ Σ22^(-1) @ Σ21
         # Shape: (..., n1, n1) - (..., n1, n2) @ (..., n2, n1) -> (..., n1, n1)
@@ -343,12 +359,17 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         - mean = [μ1; μ2]
         - covariance = [[Σ11, Σ12], [Σ21, Σ22]]
 
-        Args:
-            other: Another GaussianRV
-            cross_covariance: Cross-covariance matrix with shape (..., n1, n2)
+        Parameters
+        ----------
+        other : GaussianRV[Any]
+            Another GaussianRV
+        cross_covariance : JaxFloatArray
+            Cross-covariance matrix with shape (..., n1, n2)
 
-        Returns:
-            GaussianRV: Joint distribution
+        Returns
+        -------
+        GaussianRV
+            Joint distribution
         """
         if covariance_type not in COV_SYMN_:
             raise ValueError(
@@ -363,14 +384,11 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
 
         if cross_covariance.shape[-2:] != (n1, n2):
             raise ValueError(
-                f"Cross-covariance shape {cross_covariance.shape} incompatible "
-                f"with dimensions ({n1}, {n2})"
+                f"Cross-covariance shape {cross_covariance.shape} incompatible with dimensions ({n1}, {n2})"
             )
 
         # Get common batch shape
-        batch_shape = jnp.broadcast_shapes(
-            self.shape[:-1], other.shape[:-1], cross_covariance.shape[:-2]
-        )
+        batch_shape = jnp.broadcast_shapes(self.shape[:-1], other.shape[:-1], cross_covariance.shape[:-2])
 
         # Broadcast means
         self_mean_bc = jnp.broadcast_to(self.mean, batch_shape + (n1,))
@@ -380,14 +398,8 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         joint_mean = jnp.concatenate([self_mean_bc, other_mean_bc], axis=-1)
 
         # Broadcast covariances
-        self_cov = (
-            self.covariance if isinstance(self.covariance, jnp.ndarray) else self.covariance.full()
-        )
-        other_cov = (
-            other.covariance
-            if isinstance(other.covariance, jnp.ndarray)
-            else other.covariance.full()
-        )
+        self_cov = self.covariance if isinstance(self.covariance, jnp.ndarray) else self.covariance.full()
+        other_cov = other.covariance if isinstance(other.covariance, jnp.ndarray) else other.covariance.full()
         self_cov_bc = jnp.broadcast_to(self_cov, batch_shape + (n1, n1))
         other_cov_bc = jnp.broadcast_to(other_cov, batch_shape + (n2, n2))
         cross_cov_bc = jnp.broadcast_to(cross_covariance, batch_shape + (n1, n2))
@@ -404,21 +416,23 @@ class GaussianRV[Covariance: CovarianceType](eqx.Module):
         This is useful for computing cross-covariances in filtering applications,
         particularly for Kalman filters where you need Cov(x, Hx) = P @ H^T.
 
-        Args:
-            A: Matrix with shape (..., m, n) where n = len(self)
+        Parameters
+        ----------
+        A : JaxFloatArray
+            Matrix with shape (..., m, n) where n = len(self)
             This transforms the random variable as Y = A @ X
 
-        Returns:
-            NDArray: Cross-covariance Cov(X, Y) = Σ_X @ A^T with shape (..., n, m)
+        Returns
+        -------
+        JaxFloatArray
+            Cross-covariance Cov(X, Y) = Σ_X @ A^T with shape (..., n, m)
         """
         A = jnp.asarray(A, dtype=self.mean.dtype)
 
         # Check dimensions
         n = len(self)
         if A.shape[-1] != n:
-            raise ValueError(
-                f"Matrix A column dimension {A.shape[-1]} must match state dimension {n}"
-            )
+            raise ValueError(f"Matrix A column dimension {A.shape[-1]} must match state dimension {n}")
 
         if isinstance(self.covariance, jnp.ndarray):
             return jnp.einsum("...ij,...kj->...ik", self.covariance, A)

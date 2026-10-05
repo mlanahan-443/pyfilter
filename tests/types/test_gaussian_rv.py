@@ -203,9 +203,7 @@ class TestGaussianRVCompatibility:
 
     def test_check_compatible_array_fail(self, grv_2d):
         key = jax.random.key(33)
-        array = jax.random.uniform(
-            jax.random.split(key)[1], shape=(5, 3)
-        )  # Not broadcastable to (2,)
+        array = jax.random.uniform(jax.random.split(key)[1], shape=(5, 3))  # Not broadcastable to (2,)
         with pytest.raises(ValueError, match="Cannot broadcast shapes"):
             grv_2d._check_compatible(array)
 
@@ -532,9 +530,7 @@ class TestGaussianRVMethods:
         assert_allclose(_to_array(joint_grv.covariance), expected_cov)
 
     def test_joint_fail_cross_cov_shape(self, grv_2d, grv_1d):
-        cross_cov = jax.random.uniform(
-            key=jax.random.key(33), shape=(2, 2)
-        )  # Wrong shape (should be 2, 1)
+        cross_cov = jax.random.uniform(key=jax.random.key(33), shape=(2, 2))  # Wrong shape (should be 2, 1)
         with pytest.raises(ValueError, match="Cross-covariance shape"):
             grv_2d.joint(grv_1d, cross_cov)
 
@@ -571,16 +567,8 @@ class TestGaussianRVMethods:
         c12 = jnp.array([[0.5], [0.2]])  # (2, 1)
 
         m1, _m2 = grv_2d.mean, grv_1d.mean
-        c11 = (
-            grv_2d.covariance
-            if isinstance(grv_2d.covariance, jnp.ndarray)
-            else grv_2d.covariance.full()
-        )
-        c22 = (
-            grv_1d.covariance
-            if isinstance(grv_1d.covariance, jnp.ndarray)
-            else grv_1d.covariance.full()
-        )
+        c11 = grv_2d.covariance if isinstance(grv_2d.covariance, jnp.ndarray) else grv_2d.covariance.full()
+        c22 = grv_1d.covariance if isinstance(grv_1d.covariance, jnp.ndarray) else grv_1d.covariance.full()
         c21 = c12.T
 
         # mu_cond = mu1 + C12 @ C22_inv @ (mu2 - mu2) = mu1

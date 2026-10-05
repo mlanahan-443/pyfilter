@@ -16,11 +16,16 @@ def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
     """
     Expands the Ellipsis ('...') in an array index into a series of full slices.
 
-    Args:
-        array_index: The user-provided index (ArrayIndex).
-        ndim: The number of dimensions of the array being indexed (arr.ndim).
+    Parameters
+    ----------
+    array_index : Any
+        The user-provided index (ArrayIndex).
+    ndim : int
+        The number of dimensions of the array being indexed (arr.ndim).
 
-    Returns:
+    Returns
+    -------
+    tuple[Any, ...]
         A tuple representing the normalized index, or raises an IndexError.
     """
 
@@ -39,9 +44,7 @@ def normalize_index(array_index: Any, ndim: int) -> tuple[Any, ...]:
     # (Excludes Ellipsis and jnp.newaxis/None)
 
     # Count of components that *consume* an existing dimension
-    n_explicit_consumers = sum(
-        1 for item in array_index if item is not Ellipsis and item is not None
-    )
+    n_explicit_consumers = sum(1 for item in array_index if item is not Ellipsis and item is not None)
 
     # 3. Determine the required expansion length
     n_ellipsis = ndim - n_explicit_consumers
@@ -70,14 +73,20 @@ def left_broadcast_arrays(*args: ArrayLike) -> list[ArrayLike]:
     Broadcasts any number of arrays against each other using left-aligned logic
     (batch dimensions first), rather than NumPy's standard right-aligned logic.
 
-    Args:
-        *args: Variable length argument list of array-likes.
+    Parameters
+    ----------
+    *args : ArrayLike
+        Variable length argument list of array-likes.
 
-    Returns:
-        list: A list of broadcasted arrays, all having the same shape.
+    Returns
+    -------
+    list[ArrayLike]
+        A list of broadcasted arrays, all having the same shape.
 
-    Raises:
-        ValueError: If the arrays cannot be broadcast even after left-alignment.
+    Raises
+    ------
+    ValueError
+        If the arrays cannot be broadcast even after left-alignment.
     """
     arrays = [jnp.asarray(x) for x in args]
 
@@ -129,11 +138,16 @@ def implements_ufunc(
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Utility function for indexing handled NumPy Functions.
 
-    Args:
-        np_function: The number function.
-        handler_cache: The dictionary to store the mapping from numpy function to user implementation.
+    Parameters
+    ----------
+    np_function : Callable[..., Any]
+        The number function.
+    handler_cache : dict[Callable[..., Any], Callable[..., Any]]
+        The dictionary to store the mapping from numpy function to user implementation.
 
-    Returns:
+    Returns
+    -------
+    Callable[[Callable[..., Any]], Callable[..., Any]]
         The wrapped function.
     """
 

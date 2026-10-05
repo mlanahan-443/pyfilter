@@ -33,6 +33,9 @@ class TransitionModel(LinearTransitionBase):
     def transform(self, x: GaussianRV, dt: JaxFloatArray) -> GaussianRV:
         return self.matrix(dt) @ x
 
+    def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
+        return self.matrix(dt) @ x
+
 
 class MeasurementModel(LinearTransformBase):
     def transform(self, x: GaussianRV) -> GaussianRV:
@@ -133,9 +136,7 @@ def test_linear_filter(
     data_path: Path,
 ):
     """Test the linear filter against known output."""
-    measurement_means = pd.read_csv(
-        data_path / "test_linear_filter_measurements.csv", index_col=0
-    ).to_numpy()
+    measurement_means = pd.read_csv(data_path / "test_linear_filter_measurements.csv", index_col=0).to_numpy()
 
     measurements = GaussianRV(
         measurement_means,

@@ -29,11 +29,16 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
     ) -> tuple[GaussianRV, GaussianRV, JaxFloatArray, JaxFloatArray]:
         """Helper function for initializing the fixed point smoother.
 
-        Args:
-            x_init: The initial state estimate x(0|0) generated using a kalman filter.
-            t_init: The initial time.
+        Parameters
+        ----------
+        x_init : GaussianRV
+            The initial state estimate x(0|0) generated using a kalman filter.
+        t_init : JaxFloatArray
+            The initial time.
 
-        Returns:
+        Returns
+        -------
+        tuple[GaussianRV, GaussianRV, JaxFloatArray, JaxFloatArray]
             A tuple containing the initialized fixed point smoother variables:
                 - x_smoothed - Smoothed estimate.
                 - x_update - Kalman filter estimate.
@@ -53,15 +58,24 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
     ) -> tuple[GaussianRV, GaussianRV, JaxFloatArray]:
         """Update for the fixed point estimate.
 
-        Args:
-            x_smoothed_previous (GaussianRV): The previous smoothed estimate.
-            x_filtered_previous (GaussianRV): The previous kalman filter estimate.
-            sigma_previous: The previous cross covariacnce between smoothed and filtered estimate.
-            prev_time (JaxFloatArray): The previous time for the estimates ``x_previous``,``sigma_previous``.
-            measurement (GaussianRV): The new measurement.
-            time (JaxFloatArray): The time of the new measurement.
+        Parameters
+        ----------
+        x_smoothed_previous : GaussianRV
+            The previous smoothed estimate.
+        x_filtered_previous : GaussianRV
+            The previous kalman filter estimate.
+        sigma_previous : JaxFloatArray
+            The previous cross covariacnce between smoothed and filtered estimate.
+        prev_time : JaxFloatArray
+            The previous time for the estimates ``x_previous``,``sigma_previous``.
+        measurement : GaussianRV
+            The new measurement.
+        time : JaxFloatArray
+            The time of the new measurement.
 
-        Returns:
+        Returns
+        -------
+        tuple[GaussianRV, GaussianRV, JaxFloatArray]
             - x_smoothed: The updated smoothed estimate of the fixed point.
             - x_filtered: The updated kalman filter estimate.
             - sigma: The updated cross covariance between smoothed and filtered estimate.
@@ -101,9 +115,7 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
         Pi_new = x_smoothed_previous.covariance - lam @ W.mT
 
         x_smoothed_update = x_smoothed_previous.mean + lam @ resid_pred
-        x_update = (
-            self.transition_model.transform_array(x_filtered_previous.mean, dt) + L @ resid_pred
-        )
+        x_update = self.transition_model.transform_array(x_filtered_previous.mean, dt) + L @ resid_pred
 
         return (
             GaussianRV(mean=x_smoothed_update, covariance=Pi_new),

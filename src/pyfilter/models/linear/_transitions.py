@@ -34,12 +34,16 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     $p \times p$ upper-triangular with $T_{ij} = \Delta t^{j-i} / (j-i)!$
     for $j \geq i$.
 
-    Args:
-        n: Spatial dimension (e.g., 3 for 3-D position).
-        p: Number of kinematic levels tracked (1 = position only,
-           2 = position + velocity, 3 = position + velocity + acceleration).
+    Parameters
+    ----------
+    n : int
+        Spatial dimension (e.g., 3 for 3-D position).
+    p : int
+        Number of kinematic levels tracked (1 = position only,
+        2 = position + velocity, 3 = position + velocity + acceleration).
 
-    Examples:
+    Examples
+    --------
         2-D nearly-constant-velocity (position + velocity, p=2):
 
         >>> cv2d = IntegratorChainTransition(n=2, p=2)
@@ -71,7 +75,9 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     def _temporal_factors(self) -> tuple[JaxBoolArray, JaxFloatArray, JaxFloatArray]:
         """Precompute index structure of the temporal matrix T.
 
-        Returns:
+        Returns
+        -------
+        tuple[JaxBoolArray, JaxFloatArray, JaxFloatArray]
             valid: ``(p, p)`` upper-triangular mask.
             exponent: ``(p, p)`` array of $j - i$ values (clipped to 0
                 outside the upper triangle so ``dt ** exponent`` is safe).
@@ -100,10 +106,14 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     def matrix(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete-time transition matrix $\\Phi(\\Delta t)$.
 
-        Args:
-            dt: Timestep(s). Scalar or array of arbitrary leading batch shape.
+        Parameters
+        ----------
+        dt : JaxFloatArray
+            Timestep(s). Scalar or array of arbitrary leading batch shape.
 
-        Returns:
+        Returns
+        -------
+        JaxFloatArray
             Array of shape ``(*dt.shape, state_dim, state_dim)``.
         """
         dt_arr = jnp.asarray(dt)
@@ -131,11 +141,16 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     def transform(self, x: State, dt: JaxFloatArray) -> State:
         """Push a state forward by ``dt`` under the discrete-time dynamics.
 
-        Args:
-            x: State (deterministic vector or random variable).
-            dt: Timestep, broadcastable with any leading batch dims of ``x``.
+        Parameters
+        ----------
+        x : State
+            State (deterministic vector or random variable).
+        dt : JaxFloatArray
+            Timestep, broadcastable with any leading batch dims of ``x``.
 
-        Returns:
+        Returns
+        -------
+        State
             The propagated state.
         """
         return self.matrix(dt) @ x
@@ -143,11 +158,16 @@ class IntegratorChainTransition[State: RandomVariable](LinearTransitionBase[Stat
     def transform_array(self, x: JaxFloatArray, dt: JaxFloatArray) -> JaxFloatArray:
         """Apply the linear transition to the array ``x``.
 
-        Args:
-            x: Array variable.
-            dt: Timestep, broadcastable with any leading batch dims of ``x``.
+        Parameters
+        ----------
+        x : JaxFloatArray
+            Array variable.
+        dt : JaxFloatArray
+            Timestep, broadcastable with any leading batch dims of ``x``.
 
-        Returns:
+        Returns
+        -------
+        JaxFloatArray
             The propagated state.
         """
         return self.matrix(dt) @ x

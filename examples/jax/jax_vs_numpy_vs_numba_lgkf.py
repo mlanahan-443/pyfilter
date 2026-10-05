@@ -71,9 +71,7 @@ def numpy_filter[Arr: NDArray[np.floating]](
     x_out[0] = x0
     P_out[0] = P0
     for i in range(z.shape[0]):
-        x_out[i + 1, :], P_out[i + 1, :] = numpy_kalman_step(
-            x_out[i, :], P_out[i, :], z[i], F, H, R, Q, eye
-        )
+        x_out[i + 1, :], P_out[i + 1, :] = numpy_kalman_step(x_out[i, :], P_out[i, :], z[i], F, H, R, Q, eye)
 
     return x_out, P_out
 
@@ -119,9 +117,7 @@ def numbda_filter(
     x_out[0] = x0
     P_out[0] = P0
     for i in range(z.shape[0]):
-        x_out[i + 1, :], P_out[i + 1, :] = numbda_kalman_step(
-            x_out[i, :], P_out[i, :], z[i], F, H, R, Q, eye
-        )
+        x_out[i + 1, :], P_out[i + 1, :] = numbda_kalman_step(x_out[i, :], P_out[i, :], z[i], F, H, R, Q, eye)
 
     return x_out, P_out
 
@@ -155,9 +151,7 @@ def jax_filter(
     return jnp.concatenate([x0[jnp.newaxis, ...], xs]), jnp.concatenate([P0[jnp.newaxis, ...], Ps])
 
 
-def generate_data(
-    x0: NDArray[np.floating], n: int, F: NDArray[np.floating]
-) -> NDArray[np.floating]:
+def generate_data(x0: NDArray[np.floating], n: int, F: NDArray[np.floating]) -> NDArray[np.floating]:
     x = np.zeros((n + 1, 9), dtype=x0.dtype)
     x[0] = x0.copy()
     for i in range(1, n + 1):
@@ -220,18 +214,12 @@ def main():
     # Check correctness against NumPy reference.
     x_np, P_np = numpy_filter(x0, P0, z, F, H, R, Q)
 
-    x_jax, P_jax = (
-        np.array(x) for x in jax_filter(*tuple(jnp.asarray(a) for a in [x0, P0, z, F, H, R, Q]))
-    )
+    x_jax, P_jax = (np.array(x) for x in jax_filter(*tuple(jnp.asarray(a) for a in [x0, P0, z, F, H, R, Q])))
 
-    x_numba, P_numba = numbda_filter(
-        *tuple(arr.astype(np.float64) for arr in [x0, P0, z, F, H, R, Q])
-    )
+    x_numba, P_numba = numbda_filter(*tuple(arr.astype(np.float64) for arr in [x0, P0, z, F, H, R, Q]))
 
     for name, arrs in zip(("Jax", "Numba"), ((x_jax, P_jax), (x_numba, P_numba))):
-        np.testing.assert_almost_equal(
-            arrs[0], x_np, err_msg=f"Mean estimate differs for {name} filter"
-        )
+        np.testing.assert_almost_equal(arrs[0], x_np, err_msg=f"Mean estimate differs for {name} filter")
         np.testing.assert_almost_equal(
             arrs[1], P_np, err_msg=f"Covariance estimate differs for {name} filter"
         )

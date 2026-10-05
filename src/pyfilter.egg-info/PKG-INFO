@@ -5,10 +5,10 @@ Summary: A Python implementation of Kalman filtering
 Author-email: Michael Lanahan <michael.lanahan0430@gmail.com>
 Requires-Python: >=3.13
 Description-Content-Type: text/markdown
-Requires-Dist: numpy>=1.20.0
-Requires-Dist: polars>=1.41
-Requires-Dist: scipy>=1.17.0
-Requires-Dist: jax>=0.10.0
+Requires-Dist: numpy>=2.5.0
+Requires-Dist: polars>=1.44
+Requires-Dist: scipy>=1.18.0
+Requires-Dist: jax>=0.11.0
 Requires-Dist: equinox>=0.13.8
 Provides-Extra: dev
 Requires-Dist: pytest>=6.0; extra == "dev"
@@ -21,3 +21,8 @@ Requires-Dist: matplotlib; extra == "dev"
 Requires-Dist: rich; extra == "dev"
 Requires-Dist: numba; extra == "dev"
 Requires-Dist: jaxtyping; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx>=9.0; extra == "docs"
+Requires-Dist: numpydoc>=1.11; extra == "docs"
+Requires-Dist: pydata-sphinx-theme; extra == "docs"
+Requires-Dist: sphinx-autodoc-typehints; extra == "docs"

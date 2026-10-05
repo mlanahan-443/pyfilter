@@ -2,7 +2,6 @@ pyproject.toml
 setup.py
 src/pyfilter/__init__.py
 src/pyfilter/config.py
-src/pyfilter/linear_solve.py
 src/pyfilter/performance_util.py
 src/pyfilter/util.py
 src/pyfilter.egg-info/PKG-INFO
@@ -22,8 +21,10 @@ src/pyfilter/models/linear/__init__.py
 src/pyfilter/models/linear/_base.py
 src/pyfilter/models/linear/_measurement.py
 src/pyfilter/models/linear/_transitions.py
+src/pyfilter/smooth/linear.py
 src/pyfilter/types/__init__.py
 src/pyfilter/types/covariance.py
+src/pyfilter/types/linear_solve.py
 src/pyfilter/types/process_noise.py
 src/pyfilter/types/random_variables.py
 src/sandbox/ic_reg.py

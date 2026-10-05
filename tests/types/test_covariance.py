@@ -139,11 +139,7 @@ class TestCovarianceMethods:
 
     def test_biloc_index_cholesky_factor(self, chol_cov: CholeskyFactorCovariance):
         if chol_cov.ndim > 2:
-            bidx = (
-                (jnp.array([0]),)
-                if chol_cov.ndim == 3
-                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
-            )
+            bidx = (jnp.array([0]),) if chol_cov.ndim == 3 else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
             partial_chol_cov = chol_cov.biloc[*bidx]
 
             partial_full = partial_chol_cov.full()
@@ -156,11 +152,7 @@ class TestCovarianceMethods:
 
     def test_biloc_index_diagonal(self, diag_cov: DiagonalCovariance):
         if diag_cov.ndim > 2:
-            bidx = (
-                (jnp.array([0]),)
-                if diag_cov.ndim == 3
-                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
-            )
+            bidx = (jnp.array([0]),) if diag_cov.ndim == 3 else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
             partial_diag_cov = diag_cov.biloc[*bidx]
 
             partial_full = partial_diag_cov.full()
@@ -458,9 +450,7 @@ class TestDiagonalCovariance:
         assert_allclose(result.full(), expected_P)
         assert_allclose(result._D, expected_std)
 
-    def test_quadratic_form(
-        self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray, A_matrix: jnp.ndarray
-    ):
+    def test_quadratic_form(self, diag_cov: DiagonalCovariance, diag_std: jnp.ndarray, A_matrix: jnp.ndarray):
         """
         Tests the quadratic_form method.
         This test checks the bug fix (A * D broadcasting).
@@ -562,9 +552,7 @@ class TestInformationCovariance:
         result_cov = info_cov.quadratic_form(A_matrix)
 
         # Expected: A @ Sigma @ A.T
-        expected_Sigma = jnp.einsum(
-            "...ik,...kl,...jl->...ij", A_matrix, P_full, A_matrix, optimize=True
-        )
+        expected_Sigma = jnp.einsum("...ik,...kl,...jl->...ij", A_matrix, P_full, A_matrix, optimize=True)
 
         assert isinstance(result_cov, InformationCovariance)
         assert_allclose(result_cov.full(), expected_Sigma, rtol=1e-9, atol=1e-11)
@@ -688,11 +676,7 @@ class TestInformationCovariance:
     def test_biloc_index(self, info_cov: InformationCovariance, P_full: jnp.ndarray):
         """Test batch indexing."""
         if info_cov.ndim > 2:
-            bidx = (
-                (jnp.array([0]),)
-                if info_cov.ndim == 3
-                else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
-            )
+            bidx = (jnp.array([0]),) if info_cov.ndim == 3 else jnp.ix_(jnp.array([0]), jnp.array([1, 2]))
             partial_info_cov = info_cov.biloc[*bidx]
 
             partial_full = partial_info_cov.full()

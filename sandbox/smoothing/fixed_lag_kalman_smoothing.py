@@ -93,7 +93,6 @@ def smooth_fl(
 
 
 def main():
-
     meas_model = GaussianSelectionTransform(slice(0, 1), 2)
     H = meas_model.matrix
     x0 = jnp.array([0.0, -1.0])
@@ -169,9 +168,7 @@ def main():
     ax.plot(steps, lower / error_mean[0], lw=0.75, color="red")
     ax.fill_between(steps, lower / error_mean[0], upper / error_mean[0], alpha=0.2, color="red")
     ax.plot(steps, tr_P / tr_P[0], lw=1.5, color="k", label=r"$tr(P)$")
-    ax.plot(
-        steps, cov_improvement, lw=1.5, color="k", ls="--", label=r"$tr(P - P_{smoothed})/tr(P)$"
-    )
+    ax.plot(steps, cov_improvement, lw=1.5, color="k", ls="--", label=r"$tr(P - P_{smoothed})/tr(P)$")
 
     ax.set_xlabel("Time Steps", fontsize=12)
     ax.set_ylabel("Normalized Estimate Errors (Actual, Estimated)", fontsize=12)

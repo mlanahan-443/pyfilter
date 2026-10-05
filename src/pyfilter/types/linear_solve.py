@@ -54,12 +54,16 @@ def solve_symmetric(
     Solve a symmetric system of equations using cholesky's
     decomposition
 
-    Args:
-        A: nxn coefficient matrix.
-        B: The result of the linear transformation.
+    Parameters
+    ----------
+    A : JaxFloatArray | CovarianceBase | DiagonalCovariance | CholeskyFactorCovariance
+        nxn coefficient matrix.
+    B : JaxFloatArray
+        The result of the linear transformation.
 
     Returns
-    ----------
+    -------
+    JaxFloatArray
         The variable.
     """
 

@@ -65,8 +65,10 @@ class CovarianceBase(eqx.Module, ABC):
     def __id__(self) -> tuple[int, int]:
         """Return (memory_id, content_hash) for the underlying data.
 
-        Returns:
-            tuple[int, int]: A tuple of (memory address, content hash)
+        Returns
+        -------
+        tuple[int, int]
+            A tuple of (memory address, content hash)
         """
         pass
 
@@ -77,8 +79,10 @@ class CovarianceBase(eqx.Module, ABC):
 
         This is called "variance" to avoid confusion with "diagonal" which is ambiguous.
 
-        Returns:
-            JaxFloatArray: the variance of the covariance matrix.
+        Returns
+        -------
+        JaxFloatArray
+            the variance of the covariance matrix.
         """
         ...
 
@@ -87,8 +91,10 @@ class CovarianceBase(eqx.Module, ABC):
     def cholesky_factor(self) -> JaxFloatArray:
         """Provides the cholesky factor of the covariance matrix.
 
-        Returns:
-            JaxFloatArray: The lower triangular cholesky factorization of the covariance matrix.
+        Returns
+        -------
+        JaxFloatArray
+            The lower triangular cholesky factorization of the covariance matrix.
         """
         ...
 
@@ -96,8 +102,10 @@ class CovarianceBase(eqx.Module, ABC):
     def full(self) -> JaxFloatArray:
         """Provides the full matrix.
 
-        Returns:
-            JaxFloatArray: The full matrix representation of the covariance.
+        Returns
+        -------
+        JaxFloatArray
+            The full matrix representation of the covariance.
         """
         ...
 
@@ -110,8 +118,10 @@ class CovarianceBase(eqx.Module, ABC):
     def _add_to_covariance(self, other: CovarianceType) -> CovarianceBase:
         """Called when self is added to a Covariance object.
 
-        Args:
-            other: The other covariance object.
+        Parameters
+        ----------
+        other : CovarianceType
+            The other covariance object.
         """
         ...
 
@@ -119,8 +129,10 @@ class CovarianceBase(eqx.Module, ABC):
     def _add_to_diagonal(self, other: DiagonalCovariance) -> CovarianceBase:
         """Called when self is added to a Diagonal Covariance object.
 
-        Args:
-            other: The diagonal covariance object.
+        Parameters
+        ----------
+        other : DiagonalCovariance
+            The diagonal covariance object.
         """
         ...
 
@@ -128,11 +140,15 @@ class CovarianceBase(eqx.Module, ABC):
     def __sub__(self, other: CovarianceBase) -> CovarianceBase:
         """Subtraction of one covariance object from another.
 
-        Args:
-            other (Other): The other covariance object.
+        Parameters
+        ----------
+        other : CovarianceBase
+            The other covariance object.
 
-        Returns:
-            CovarianceBase: The covariance object
+        Returns
+        -------
+        CovarianceBase
+            The covariance object
         """
         ...
 
@@ -140,11 +156,15 @@ class CovarianceBase(eqx.Module, ABC):
     def __add__(self, other: CovarianceType) -> CovarianceBase:
         """Addition of one covariance object with another.
 
-        Args:
-            other (Other): The other covariance object.
+        Parameters
+        ----------
+        other : CovarianceType
+            The other covariance object.
 
-        Returns:
-            CovarianceBase: The covariance object
+        Returns
+        -------
+        CovarianceBase
+            The covariance object
         """
         ...
 
@@ -152,11 +172,15 @@ class CovarianceBase(eqx.Module, ABC):
     def __mul__(self, other: float) -> CovarianceBase:
         """Multiplication of covariance object by scalar value.
 
-        Args:
-            other: the scalar value.
+        Parameters
+        ----------
+        other : float
+            the scalar value.
 
-        Returns:
-            CovarianceBase: The covariance object
+        Returns
+        -------
+        CovarianceBase
+            The covariance object
         """
         ...
 
@@ -165,7 +189,9 @@ class CovarianceBase(eqx.Module, ABC):
 
         Trace of a triangular matrix is the sum of its diagonal components.
 
-        Returns:
+        Returns
+        -------
+        JaxFloatArray
             The trace of the batch covariances.
         """
         result: JaxFloatArray = jnp.sum(self.variance, axis=-1)
@@ -173,9 +199,7 @@ class CovarianceBase(eqx.Module, ABC):
 
     @classmethod
     @abstractmethod
-    def concatenate(
-        cls, other: Iterable[CovarianceBase], axis: int | tuple[int, ...] = 0
-    ) -> CovarianceBase:
+    def concatenate(cls, other: Iterable[CovarianceBase], axis: int | tuple[int, ...] = 0) -> CovarianceBase:
         """Method for concatenation."""
         ...
 
@@ -204,9 +228,7 @@ class CovarianceBase(eqx.Module, ABC):
         ...
 
     @abstractmethod
-    def _apply_fast_matrix_slice(
-        self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]
-    ) -> Self:
+    def _apply_fast_matrix_slice(self, batch_idx: tuple[Any, ...], matrix_idx: tuple[Any, ...]) -> Self:
         """
         Performs the fast slicing on the specific underlying data (_L or _D).
         """
@@ -232,14 +254,20 @@ class CovarianceBase(eqx.Module, ABC):
         Only leading indices, i.e. 0,..., k < n where n is the dimension of the
         Covariance matrix result in a valid cholesky factor.
 
-        Args:
-            index: The index for the underlying array.
+        Parameters
+        ----------
+        index : ArrayIndex
+            The index for the underlying array.
 
-        Returns:
+        Returns
+        -------
+        Self
             The subset of the covariance object.
 
         Raises
-            ValueError: If the passed object is not a valid slice.
+        ------
+        ValueError
+            If the passed object is not a valid slice.
         """
 
         norm_index = self._get_norm_index(index)
@@ -308,8 +336,10 @@ class CholeskyFactorCovariance(CovarianceBase):
     def cholesky_factor(self) -> JaxFloatArray:
         """The cholesky factor is just the matrix L.
 
-        Returns:
-            JaxFloatArray: The cholesky factor.
+        Returns
+        -------
+        JaxFloatArray
+            The cholesky factor.
         """
         return self._L
 
@@ -319,8 +349,10 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         A somewhat surprising result: Var(P) = diag(P) = ||L[i,:]||_2^2
 
-        Returns:
-            JaxFloatArray: The variance
+        Returns
+        -------
+        JaxFloatArray
+            The variance
         """
         result: JaxFloatArray = jnp.linalg.norm(self.cholesky_factor, axis=-1) ** 2
         return result
@@ -330,24 +362,18 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
-        return cholesky_factor(
-            self.full() + (other.full() if isinstance(other, CovarianceBase) else other)
-        )
+        return cholesky_factor(self.full() + (other.full() if isinstance(other, CovarianceBase) else other))
 
     def _add_to_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
         """Addition of an information covariance object (other) to self."""
         return cholesky_factor(self.full() + other.full())
 
-    def _sub_covariance(
-        self, other: CholeskyFactorCovariance | JaxFloatArray
-    ) -> CholeskyFactorCovariance:
+    def _sub_covariance(self, other: CholeskyFactorCovariance | JaxFloatArray) -> CholeskyFactorCovariance:
         """Subtraction of one covariance object (other) from self.
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
         """
-        return cholesky_factor(
-            self.full() - (other.full() if isinstance(other, CovarianceBase) else other)
-        )
+        return cholesky_factor(self.full() - (other.full() if isinstance(other, CovarianceBase) else other))
 
     def _sub_information(self, other: InformationCovariance) -> CholeskyFactorCovariance:
         """Subtraction of an information covariance object (other) from self."""
@@ -358,11 +384,15 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         The provided covariance object must be a DiagonalCovariance.
 
-        Args:
-            other (DiagonalCovariance): The other covariance instance.
+        Parameters
+        ----------
+        other : DiagonalCovariance
+            The other covariance instance.
 
-        Returns:
-            Covariance: The resulting covariance.
+        Returns
+        -------
+        CholeskyFactorCovariance
+            The resulting covariance.
         """
 
         mat = self.full()
@@ -374,11 +404,15 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         The provided covariance object must be a DiagonalCovariance.
 
-        Args:
-            other (DiagonalCovariance): The other covariance instance.
+        Parameters
+        ----------
+        other : DiagonalCovariance
+            The other covariance instance.
 
-        Returns:
-            Covariance: The resulting covariance.
+        Returns
+        -------
+        CholeskyFactorCovariance
+            The resulting covariance.
         """
 
         mat = self.full()
@@ -428,10 +462,14 @@ class CholeskyFactorCovariance(CovarianceBase):
     def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Addition of is communative.
 
-        Args:
-            other (Other): The other covariance object.
+        Parameters
+        ----------
+        other : CovarianceType
+            The other covariance object.
 
-        Returns:
+        Returns
+        -------
+        CholeskyFactorCovariance
             The resulting covariance object.
         """
 
@@ -456,11 +494,15 @@ class CholeskyFactorCovariance(CovarianceBase):
     def __mul__(self, other: float) -> CholeskyFactorCovariance:
         """Multiply covariance by a scalar value.
 
-        Args:
-            other (float): The scalar value.
+        Parameters
+        ----------
+        other : float
+            The scalar value.
 
-        Returns:
-            CholeskyFactorCovariance: The resulting covariance object.
+        Returns
+        -------
+        CholeskyFactorCovariance
+            The resulting covariance object.
         """
 
         return CholeskyFactorCovariance(other**0.5 * self.cholesky_factor)
@@ -477,11 +519,15 @@ class CholeskyFactorCovariance(CovarianceBase):
         When A is m x n and L is n x n, A @ L is m x n (wide factor).
         We use QR decomposition to get the square m x m Cholesky factor.
 
-        Args:
-            other (JaxFloatArray): The matrix A.
+        Parameters
+        ----------
+        other : JaxFloatArray
+            The matrix A.
 
-        Returns:
-            Covariance: The quadratic product of the current covariance.
+        Returns
+        -------
+        CholeskyFactorCovariance
+            The quadratic product of the current covariance.
         """
         # Compute A @ L (may be wide if A is not square)
         AL = jnp.einsum("...ik,...kj->...ij", other, self._L)
@@ -501,8 +547,10 @@ class CholeskyFactorCovariance(CovarianceBase):
 
         That is LL^T.
 
-        Returns:
-            JaxFloatArray: the full matrix representation of the covariance.
+        Returns
+        -------
+        JaxFloatArray
+            the full matrix representation of the covariance.
         """
         result: JaxFloatArray = jnp.einsum("...ik,...jk->...ij", self._L, self._L)
         return result
@@ -554,7 +602,8 @@ class CholeskyFactorCovariance(CovarianceBase):
         batch_shape, matrix_shape = norm_index[:-2], norm_index[-2:]
         if matrix_shape != self.matrix_shape:
             raise ValueError(
-                f"Cannot broadcast the matrix shape of DiagonalCovariance: {self.matrix_shape} to the new matrix shape: {matrix_shape})"
+                f"Cannot broadcast the matrix shape of DiagonalCovariance: {self.matrix_shape} \
+                    to the new matrix shape: {matrix_shape})"
             )
         return CholeskyFactorCovariance(
             jnp.broadcast_to(self._L, batch_shape + matrix_shape, out_sharding=out_sharding)
@@ -611,9 +660,7 @@ class InformationCovariance(CovarianceBase):
         # Solve Lambda @ X = I to get X = Sigma = Lambda^{-1}
         # Use Cholesky decomposition of Lambda for numerical stability
         L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
-        identity = jnp.broadcast_to(
-            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
-        )
+        identity = jnp.broadcast_to(jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape)
         Sigma = cho_solve(
             (L_lambda, lower),
             identity,
@@ -629,9 +676,7 @@ class InformationCovariance(CovarianceBase):
         """Get diagonal of Sigma = Lambda^{-1}"""
         # For efficiency, we only compute the diagonal elements
         # diag(Lambda^{-1}) can be computed by solving Lambda @ X = I and taking diag(X)
-        identity = jnp.broadcast_to(
-            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
-        )
+        identity = jnp.broadcast_to(jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape)
         L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
         Sigma = cho_solve(
             (L_lambda, lower),
@@ -644,12 +689,12 @@ class InformationCovariance(CovarianceBase):
     def full(self) -> JaxFloatArray:
         """The full covariance matrix Sigma = Lambda^{-1}.
 
-        Returns:
-            JaxFloatArray: The full covariance matrix.
+        Returns
+        -------
+        JaxFloatArray
+            The full covariance matrix.
         """
-        identity = jnp.broadcast_to(
-            jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape
-        )
+        identity = jnp.broadcast_to(jnp.eye(self.matrix_shape[0], dtype=self._Lambda.dtype), self.shape)
         L_lambda, lower = cho_factor(self._Lambda, lower=True, check_finite=CHOLESKY_CHECK_FINITE_)
         return cho_solve(
             (L_lambda, lower),
@@ -668,10 +713,14 @@ class InformationCovariance(CovarianceBase):
         If Sigma = Lambda^{-1}, then A @ Sigma @ A.T = (A^{-T} @ Lambda @ A^{-1})^{-1}
         For efficiency when A is invertible, we compute: Lambda_new = A^{-T} @ Lambda @ A^{-1}
 
-        Args:
-            other: Matrix A for the quadratic form
+        Parameters
+        ----------
+        other : JaxFloatArray
+            Matrix A for the quadratic form
 
-        Returns:
+        Returns
+        -------
+        InformationCovariance
             InformationCovariance with updated precision matrix
         """
         # Compute A^{-1} @ Lambda @ A^{-T} = (A @ Lambda^{-1} @ A.T)^{-1}
@@ -714,9 +763,7 @@ class InformationCovariance(CovarianceBase):
 
     def __add__(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Add covariances (requires conversion from information form)."""
-        if isinstance(
-            other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)
-        ):
+        if isinstance(other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)):
             return self._add_to_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._add_to_diagonal(other)
@@ -729,9 +776,7 @@ class InformationCovariance(CovarianceBase):
 
     def __sub__(self, other: CovarianceType) -> CholeskyFactorCovariance:
         """Subtract covariance from self."""
-        if isinstance(
-            other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)
-        ):
+        if isinstance(other, (CholeskyFactorCovariance, InformationCovariance, jnp.ndarray, Number)):
             return self._sub_covariance(other)
         elif isinstance(other, DiagonalCovariance):
             return self._sub_diagonal(other)
@@ -778,9 +823,7 @@ class InformationCovariance(CovarianceBase):
         return InformationCovariance(new_Lambda)
 
     @classmethod
-    def concatenate(
-        cls, other: Iterable[InformationCovariance], axis: int = 0
-    ) -> InformationCovariance:
+    def concatenate(cls, other: Iterable[InformationCovariance], axis: int = 0) -> InformationCovariance:
         """Concatenate multiple InformationCovariance objects"""
         Lambda = jnp.concatenate([cov._Lambda for cov in other], axis=axis)
         return cls(Lambda)
@@ -827,8 +870,10 @@ class DiagonalCovariance(CovarianceBase):
     def full(self) -> JaxFloatArray:
         """The full matrix representation.
 
-        Returns:
-            JaxFloatArray: The full matrix.
+        Returns
+        -------
+        JaxFloatArray
+            The full matrix.
         """
         return jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(self.variance)
 
@@ -836,19 +881,25 @@ class DiagonalCovariance(CovarianceBase):
     def cholesky_factor(self) -> JaxFloatArray:
         """The cholesky factor of a diagonal matrix.
 
-        Returns:
-            JaxFloatArray: The cholesky factor.
+        Returns
+        -------
+        JaxFloatArray
+            The cholesky factor.
         """
         return jnp.vectorize(jnp.diag, signature="(n)->(n,n)")(self._D)
 
     def quadratic_form(self, other: JaxFloatArray) -> CholeskyFactorCovariance:
         """Computes the quadratic product A @ D^2 @ A.T.
 
-        Args:
-            other (JaxFloatArray): The matrix A.
+        Parameters
+        ----------
+        other : JaxFloatArray
+            The matrix A.
 
-        Returns:
-            Covariance: The quadratic product of the current covariance.
+        Returns
+        -------
+        CholeskyFactorCovariance
+            The quadratic product of the current covariance.
         """
 
         return CholeskyFactorCovariance(other * self._D[..., jnp.newaxis, :])
@@ -870,9 +921,7 @@ class DiagonalCovariance(CovarianceBase):
         mat = mat.at[..., *self.diagonal_indices].add(self.variance)
         return cholesky_factor(mat)
 
-    def _sub_covariance(
-        self, other: CholeskyFactorCovariance | JaxFloatArray
-    ) -> CholeskyFactorCovariance:
+    def _sub_covariance(self, other: CholeskyFactorCovariance | JaxFloatArray) -> CholeskyFactorCovariance:
         """Subtraction of one covariance object (other) from self (self - other).
 
         The provided covariance may be either a Covariance or just a JaxFloatArray.
@@ -892,11 +941,15 @@ class DiagonalCovariance(CovarianceBase):
 
         The provided covariance object must be a DiagonalCovariance.
 
-        Args:
-            other (DiagonalCovariance): The other covariance instance.
+        Parameters
+        ----------
+        other : DiagonalCovariance
+            The other covariance instance.
 
-        Returns:
-            Covariance: The resulting covariance.
+        Returns
+        -------
+        DiagonalCovariance
+            The resulting covariance.
         """
 
         return DiagonalCovariance((other.variance + self.variance) ** 0.5)
@@ -906,11 +959,15 @@ class DiagonalCovariance(CovarianceBase):
 
         The provided covariance object must be a DiagonalCovariance.
 
-        Args:
-            other (DiagonalCovariance): The other covariance instance.
+        Parameters
+        ----------
+        other : DiagonalCovariance
+            The other covariance instance.
 
-        Returns:
-            Covariance: The resulting covariance.
+        Returns
+        -------
+        DiagonalCovariance
+            The resulting covariance.
         """
 
         return DiagonalCovariance((self.variance - other.variance) ** 0.5)
@@ -958,10 +1015,14 @@ class DiagonalCovariance(CovarianceBase):
     def __radd__(self, other: CovarianceType) -> CholeskyFactorCovariance | DiagonalCovariance:
         """Addition of is communative.
 
-        Args:
-            other (Other): The other covariance object.
+        Parameters
+        ----------
+        other : CovarianceType
+            The other covariance object.
 
-        Returns:
+        Returns
+        -------
+        CholeskyFactorCovariance | DiagonalCovariance
             The covariance object.
         """
 
@@ -986,11 +1047,15 @@ class DiagonalCovariance(CovarianceBase):
     def __mul__(self, other: float) -> DiagonalCovariance:
         """Multiply covariance by a scalar value.
 
-        Args:
-            other (float): The scalar value.
+        Parameters
+        ----------
+        other : float
+            The scalar value.
 
-        Returns:
-            CholeskyFactorCovariance: The resulting covariance object.
+        Returns
+        -------
+        DiagonalCovariance
+            The resulting covariance object.
         """
 
         return DiagonalCovariance(other**0.5 * self._D)
@@ -1001,7 +1066,7 @@ class DiagonalCovariance(CovarianceBase):
         """
         row_idx, col_idx = matrix_indexer
 
-        if type(row_idx) != type(col_idx):
+        if isinstance(row_idx, type(col_idx)):
             return False
 
         if isinstance(row_idx, slice) and isinstance(col_idx, slice):
@@ -1079,14 +1144,13 @@ class DiagonalCovariance(CovarianceBase):
         norm_index = self._get_norm_index(shape)
 
         matrix_shape = (
-            (norm_index[-1].squeeze(),)
-            if isinstance(norm_index[-1], jnp.ndarray)
-            else norm_index[-1:]
+            (norm_index[-1].squeeze(),) if isinstance(norm_index[-1], jnp.ndarray) else norm_index[-1:]
         )
 
         if matrix_shape != self.matrix_shape[:-1]:
             raise ValueError(
-                f"Cannot broadcast the matrix shape of DiagonalCovariance: {self.matrix_shape} to the new matrix shape: ({matrix_shape, matrix_shape})"
+                f"Cannot broadcast the matrix shape of DiagonalCovariance: {self.matrix_shape} \
+                    to the new matrix shape: ({matrix_shape, matrix_shape})"
             )
 
         batch_shape = norm_index[:-2]
@@ -1116,12 +1180,17 @@ def solve_cholesky_covariance(
 
     Where P is a cholesky factor representation of the covariance matrix P.
 
-    Args:
-        P: A covariance object.
-        B: The result of the linear transformation
+    Parameters
+    ----------
+    P : CholeskyFactorCovariance | CovarianceBase
+        A covariance object.
+    B : JaxFloatArray
+        The result of the linear transformation
 
-    Returns:
-        X: The variable.
+    Returns
+    -------
+    JaxFloatArray
+        The variable X.
     """
 
     result: JaxFloatArray = cho_solve(
@@ -1138,12 +1207,17 @@ def solve_diagonal_covariance(P_: DiagonalCovariance, B_: JaxFloatArray) -> JaxF
 
     Where P is a diagonal matrix.
 
-    Args:
-        P: A covariance object.
-        B: The result of the linear transformation
+    Parameters
+    ----------
+    P_ : DiagonalCovariance
+        A covariance object.
+    B_ : JaxFloatArray
+        The result of the linear transformation
 
-    Returns:
-        X: The variable.
+    Returns
+    -------
+    JaxFloatArray
+        The variable X.
     """
     P, B = left_broadcast_arrays(P_.variance, B_)
     result: JaxFloatArray = B / P
@@ -1157,12 +1231,17 @@ def linear_cross_covariance(
 
     Let Cov(x) = P and z = Ax. Then Cov(x,z) = Cov(x,Ax) = P_ @ A.T
 
-    Args:
-        P_: The covariance.
-        A_: The linear transform.
+    Parameters
+    ----------
+    P_ : CholeskyFactorCovariance | DiagonalCovariance
+        The covariance.
+    A_ : JaxFloatArray
+        The linear transform.
 
-    Returns:
-        JaxFloatArray: The cross covariance.
+    Returns
+    -------
+    JaxFloatArray
+        The cross covariance.
     """
 
     if isinstance(P_, CholeskyFactorCovariance):

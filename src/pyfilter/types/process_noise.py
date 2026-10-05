@@ -52,16 +52,21 @@ class WeinerProcessNoise(ProcessNoise):
     .. math::
         Q_d = \int_{0}^{\Delta t} e^{A \tau} \tilde{Q} e^{A^T \tau} d\tau
 
-    Args:
-        n: Spatial dimension.
-        p: Number of kinematic levels.
-        intensity: Continuous-time noise intensity $\tilde{Q}$ on the
-            highest derivative. Either a scalar (interpreted as $\sigma^2 I_n$),
-            a length-$n$ vector (diagonal), or an $(n, n)$ matrix.
-            Optional leading batch dimensions are supported and broadcast
-            with ``dt``.
+    Parameters
+    ----------
+    n : int
+        Spatial dimension.
+    p : int
+        Number of kinematic levels.
+    intensity : JaxFloatArray
+        Continuous-time noise intensity $\tilde{Q}$ on the
+        highest derivative. Either a scalar (interpreted as $\sigma^2 I_n$),
+        a length-$n$ vector (diagonal), or an $(n, n)$ matrix.
+        Optional leading batch dimensions are supported and broadcast
+        with ``dt``.
 
-    Examples:
+    Examples
+    --------
         # 2-D nearly-constant-velocity (position + velocity, p=2), with isotropic covariance:
         >>> wpn_cv_2d = WeinerProcessNoise(2,2, jnp.array(0.1))
         >>> wpn_cv_2d(jnp.array(0.1))
@@ -84,7 +89,8 @@ class WeinerProcessNoise(ProcessNoise):
         ...        [0.05      , 0.        , 0.1       , 0.        ],
         ...        [0.        , 0.1       , 0.        , 0.2       ]]])
 
-        # 3-D nearly-constant-acceleration (position + velocity + acceleration, p=3) with anisotropic covariance:
+        # 3-D nearly-constant-acceleration (position + velocity + acceleration, p=3) with
+        # anisotropic covariance:
         >>> wpn_ca_3d = WeinerProcessNoise(3,3, jnp.array([0.01,0.02,0.014]))
         >>> wpn_ca_3d(jnp.array([0.01,0.03])).shape
         ... (2,9,9)
@@ -107,8 +113,11 @@ class WeinerProcessNoise(ProcessNoise):
     def _temporal_factors(self) -> tuple[JaxFloatArray, JaxFloatArray]:
         """Precompute the (p, p) exponent and 1/coefficient grids.
 
-        Returns ``(exponents, coeffs)`` such that
-        ``tau[i, j] = dt ** exponents[i, j] * coeffs[i, j]``.
+        Returns
+        -------
+        tuple[JaxFloatArray, JaxFloatArray]
+            ``(exponents, coeffs)`` such that
+            ``tau[i, j] = dt ** exponents[i, j] * coeffs[i, j]``.
         """
         # a_i = p - 1 - i
         prange = jnp.arange(self.p)
@@ -130,10 +139,14 @@ class WeinerProcessNoise(ProcessNoise):
     def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
         """Discrete process noise covariance $Q_d(\\Delta t)$.
 
-        Args:
-            dt: Timestep(s); scalar or arbitrary leading batch shape.
+        Parameters
+        ----------
+        dt : JaxFloatArray
+            Timestep(s); scalar or arbitrary leading batch shape.
 
-        Returns:
+        Returns
+        -------
+        JaxFloatArray
             Array of shape ``(*broadcast_shape, state_dim, state_dim)`` where
             ``broadcast_shape`` is the broadcast of ``dt.shape`` and the
             leading batch dims of ``intensity``.
@@ -178,10 +191,15 @@ class VanLoanProcessNoise(ProcessNoise):
 
     Where the upper right hand block is the F^{-1} Q_d, which can be solved explicitly.
 
-    Args:
-        A: continuous time system matrix.
-        Qc: continuous time process noise.
+    Parameters
+    ----------
+    A : JaxFloatArray
+        continuous time system matrix.
+    Qc : JaxFloatArray
+        continuous time process noise.
 
+    Examples
+    --------
     # 2-D nearly-constant-velocity (position + velocity, p=2), with isotropic covariance:
     >>> A = jnp.array([[0,0,1,0],
                       [0,0,0,1],

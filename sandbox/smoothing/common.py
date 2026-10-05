@@ -41,9 +41,7 @@ class Simulation:
         xnew = self.generating_transition.transform(x, self.time_step)
         return xnew, xnew
 
-    def __call__(
-        self, x0: jnp.ndarray, key: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    def __call__(self, x0: jnp.ndarray, key: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Do the simulation."""
         dt = jnp.repeat(self.time_step, self.n + 1)
         time = jnp.cumsum(dt)
