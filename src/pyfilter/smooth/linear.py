@@ -52,7 +52,7 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
         x_filtered_previous: GaussianRV[JaxFloatArray],
         sigma_previous: JaxFloatArray,
         prev_time: JaxFloatArray,
-        measurement: GaussianRV[Covariance],
+        measurement: GaussianRV[JaxFloatArray],
         time: JaxFloatArray,
     ) -> tuple[GaussianRV[JaxFloatArray], GaussianRV[JaxFloatArray], JaxFloatArray]:
         """Update for the fixed point estimate.
@@ -98,9 +98,7 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
         # Intermediate variables.
         PHt = P_prev @ H.mT  # PH^T
         S = H @ PHt + R  # measurement covariance HPH^T + R
-        cS = (
-            jscipy.linalg.cho_factor(S) if isinstance(S, jnp.ndarray) else S.cholesky_factor
-        )  # get the cholesky factor of the measurement covariance.
+        cS = jscipy.linalg.cho_factor(S)
         W = sigma_previous @ H.mT  # Interemdiate term for smoother kalman gain
 
         # both gains from one triangular solve

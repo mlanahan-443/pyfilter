@@ -64,10 +64,7 @@ class TestLinearGaussianFixedPointSmoother:
         self._test_lgfps_api(x_s, x_u, sigma, P_full.shape[:-2], x_init.shape)
 
         mcov = [
-            diag_cov[..., :2, :2],
-            diag_cov.full()[:2, :2],
-            CholeskyFactorCovariance(diag_cov.full()[:2, :2]),
-            InformationCovariance(1.0 / diag_cov.full()[:2, :2]),
+            diag_cov[..., :2, :2].full()
         ]
         for mc in mcov:
             measurement = GaussianRV(jnp.ones(P_full.shape[:-2] + (2,)), covariance=mc)
