@@ -6,6 +6,8 @@ from pyfilter.types.covariance import (
 )
 from jax import numpy as jnp
 import jax
+from pyfilter.types import InformationCovariance
+from .model_mock import MeasurementModel, ProcessNoiseModel, TransitionModel
 
 
 @pytest.fixture
@@ -58,8 +60,6 @@ def P_full(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
 @pytest.fixture
 def L_factor(P_full: jnp.ndarray) -> jnp.ndarray:
     """Returns the true lower-triangular Cholesky factor of P."""
-    # NOTE: We use jnp.linalg.cholesky here because it supports
-    # batch dimensions natively, whereas jax.scipy.linalg.cho_factor does not.
     return jnp.linalg.cholesky(P_full)
 
 
@@ -85,3 +85,21 @@ def info_cov(P_full: jnp.ndarray) -> InformationCovariance:
     """Create an InformationCovariance from Lambda = Sigma^{-1}"""
     Lambda = jnp.linalg.inv(P_full)
     return InformationCovariance(Lambda.copy())
+
+
+@pytest.fixture
+def measurement_model() -> MeasurementModel:
+    """An instance of the measurement model."""
+    return MeasurementModel()
+
+
+@pytest.fixture
+def process_model(variance: float) -> ProcessNoiseModel:
+    """The process noise model."""
+    return ProcessNoiseModel(variance, (6, 6))
+
+
+@pytest.fixture
+def transition_model() -> TransitionModel:
+    """The transition model."""
+    return TransitionModel()

@@ -7,16 +7,15 @@ from pyfilter.filter.linear import (
     SquareRootLinearGuassianKalman,
     InformationLinearGuassianFilter,
 )
-from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import GenericLinearTransform, LTI_Transition
 from pyfilter.types.covariance import (
     CholeskyFactorCovariance,
     DiagonalCovariance,
     InformationCovariance,
 )
-from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
 import numpy as np
+from ..model_mock import SimpleProcessNoise
 
 jax.config.update("jax_enable_x64", True)
 
@@ -101,22 +100,6 @@ def A2(dim: int, batch_shape: tuple[int, ...]) -> jnp.ndarray:
     """Returns a random transformation matrix A."""
     # We make A batched as well to test full batch-on-batch operations
     return jax.random.uniform(key=jax.random.key(402), shape=batch_shape + (dim, dim)) + 0.1
-
-
-class SimpleProcessNoise(ProcessNoise):
-    """Simple constant process noise for testing."""
-
-    _shape: int
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        return (self._shape,)
-
-    def covariance(self, dt: JaxFloatArray) -> JaxFloatArray:
-        return jnp.diag(jnp.ones(self._shape) * 1e-2)
-
-    def inverse_covariance(self, dt: JaxFloatArray) -> InformationCovariance:
-        return InformationCovariance(jnp.diag(jnp.ones(self._shape) * 100))
 
 
 def test_linear_gaussian_kalman_basic():

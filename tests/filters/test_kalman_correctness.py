@@ -1,9 +1,4 @@
-"""Comprehensive tests for Kalman filter correctness.
-
-This module tests the LinearGaussianKalman filter against known analytical
-solutions and verifies that both the conditional-based and classical Kalman
-gain implementations produce identical results.
-"""
+"""This module tests the LinearGaussianKalman filter against known analytical solutions."""
 
 import numpy as np
 import pytest

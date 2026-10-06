@@ -10,8 +10,7 @@ from pyfilter.hints.jax_hints import JaxFloatArray
 from pyfilter.models.linear import LinearTransformBase, LinearTransitionBase
 from pyfilter.types.process_noise import ProcessNoise
 from pyfilter.types.random_variables import GaussianRV
-
-type Variable = GaussianRV[Any]
+from pyfilter.types import Covariance
 
 
 class LinearGaussianFixedPointSmoother(eqx.Module):
@@ -19,14 +18,14 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
 
     Based on Simon, 2006 Page 269 Equations 9.24-9.25."""
 
-    transition_model: LinearTransitionBase[GaussianRV[Any]]
+    transition_model: LinearTransitionBase[GaussianRV[JaxFloatArray]]
     process_noise: ProcessNoise
-    measurement_model: LinearTransformBase[GaussianRV[Any]]
+    measurement_model: LinearTransformBase[GaussianRV[JaxFloatArray]]
 
     @staticmethod
     def initialize_fixed_point(
-        x_init: GaussianRV, t_init: JaxFloatArray
-    ) -> tuple[GaussianRV, GaussianRV, JaxFloatArray, JaxFloatArray]:
+        x_init: GaussianRV[JaxFloatArray], t_init: JaxFloatArray
+    ) -> tuple[GaussianRV[JaxFloatArray], GaussianRV[JaxFloatArray], JaxFloatArray, JaxFloatArray]:
         """Helper function for initializing the fixed point smoother.
 
         Parameters
@@ -49,13 +48,13 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
 
     def update(
         self,
-        x_smoothed_previous: GaussianRV,
-        x_filtered_previous: GaussianRV,
+        x_smoothed_previous: GaussianRV[JaxFloatArray],
+        x_filtered_previous: GaussianRV[JaxFloatArray],
         sigma_previous: JaxFloatArray,
         prev_time: JaxFloatArray,
-        measurement: GaussianRV,
+        measurement: GaussianRV[Covariance],
         time: JaxFloatArray,
-    ) -> tuple[GaussianRV, GaussianRV, JaxFloatArray]:
+    ) -> tuple[GaussianRV[JaxFloatArray], GaussianRV[JaxFloatArray], JaxFloatArray]:
         """Update for the fixed point estimate.
 
         Parameters
@@ -91,13 +90,17 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
         )
 
         # Common computed terms: Predicted measurement mean and residual mean.
-        z_pred = self.measurement_model.transform_array(x_filtered_previous.mean)
+        z_pred = self.measurement_model.transform_array(x_filtered_previous.mean[..., jnp.newaxis]).squeeze(
+            axis=-1
+        )
         resid_pred = measurement.mean - z_pred
 
         # Intermediate variables.
         PHt = P_prev @ H.mT  # PH^T
         S = H @ PHt + R  # measurement covariance HPH^T + R
-        cS = jscipy.linalg.cho_factor(S)  # get the cholesky factor of the measurement covariance.
+        cS = (
+            jscipy.linalg.cho_factor(S) if isinstance(S, jnp.ndarray) else S.cholesky_factor
+        )  # get the cholesky factor of the measurement covariance.
         W = sigma_previous @ H.mT  # Interemdiate term for smoother kalman gain
 
         # both gains from one triangular solve
@@ -114,8 +117,12 @@ class LinearGaussianFixedPointSmoother(eqx.Module):
         P_update = FP_FminusLH_T + Q
         Pi_new = x_smoothed_previous.covariance - lam @ W.mT
 
-        x_smoothed_update = x_smoothed_previous.mean + lam @ resid_pred
-        x_update = self.transition_model.transform_array(x_filtered_previous.mean, dt) + L @ resid_pred
+        x_smoothed_update = x_smoothed_previous.mean + jnp.squeeze(
+            lam @ resid_pred[..., jnp.newaxis], axis=-1
+        )
+        x_update = self.transition_model.transform_array(
+            x_filtered_previous.mean[..., jnp.newaxis], dt
+        ).squeeze(axis=-1) + jnp.squeeze(L @ resid_pred[..., jnp.newaxis], axis=-1)
 
         return (
             GaussianRV(mean=x_smoothed_update, covariance=Pi_new),
